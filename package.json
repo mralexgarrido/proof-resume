@@ -1,0 +1,12 @@
+{
+  "name": "proof-resume",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An offline, evidence-first resume workshop for students.",
+  "license": "MIT",
+  "repository": {"type": "git", "url": "https://github.com/mralexgarrido/proof-resume.git"},
+  "engines": {"node": ">=22.13.0"},
+  "type": "module",
+  "scripts": {"dev": "vite --host 0.0.0.0 --port 4173", "build": "node --test tests/core.test.mjs && node scripts/build.mjs", "test": "node --test tests/core.test.mjs"},
+  "devDependencies": {"vite": "8.0.13"}
+}

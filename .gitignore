@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+.openai/
+.sites-runtime/
+*.log
+# Personal exports do not belong in source control.
+Proof-Resume-Backup*.json
+*-Resume.docx

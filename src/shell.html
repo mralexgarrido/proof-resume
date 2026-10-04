@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--
+MIT License
+
+Copyright (c) 2026 Alex Garrido
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--> 
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Discover what you bring. Build a compelling student résumé from real experiences, with private reflection, live editing, and free Word export. Works offline.">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#243fe4">
+<title>Proof · Student Résumé Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%23243fe4'/%3E%3Cpath d='M12 30V10h10a7 7 0 0 1 0 14h-4v6zm6-12h4a1 1 0 0 0 0-2h-4z' fill='white'/%3E%3C/svg%3E">
+<style>/* PROOF_STYLES */</style>
+</head>
+<body>
+<a class="skip" href="#editor">Skip to resume editor</a>
+<header class="topbar">
+  <button class="brand" data-action="navigate" data-page="discover" aria-label="Proof home"><span class="brand-mark" aria-hidden="true">p</span><span class="brand-title">proof<span style="color:var(--blue)">.</span></span><span class="brand-sub">Student resume studio</span></button>
+  <div class="header-actions"><button class="btn subtle save-status" data-action="data" id="save-state" aria-label="Save and manage your work"><span id="status-label">Starting</span></button><button class="btn subtle header-example" data-action="examples">See an example</button><button class="btn mobile-preview" data-action="preview">Preview</button><button class="btn primary" data-action="navigate" data-page="finish">Export <span aria-hidden="true">↗</span></button></div>
+</header>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Workshop navigation"><div><p class="sidebar-label">Your resume workshop</p><nav class="steps" id="steps" aria-label="Workshop sections"></nav></div><div class="progress-block"><p class="progress-text" id="progress-text"></p><div class="progress-track" role="progressbar" aria-label="Resume foundations" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" id="progress"><div class="progress-fill" id="progress-fill"></div></div></div><div class="sidebar-footer"><p class="label">Your work stays yours.</p><p class="privacy-note">No account. No AI. Works offline. Save a backup to take your work with you.</p><button class="btn link" data-action="data">Save &amp; manage work</button><br><button class="btn link" data-action="about">About Proof</button></div></aside>
+  <main class="workspace"><section class="editor" id="editor" aria-label="Resume workshop"></section><aside class="preview-panel" aria-label="Live resume preview"><div class="preview-inner"><div class="preview-toolbar"><div><strong>Live preview</strong><p class="small" id="active-version"></p></div><button class="btn compact" data-action="preview">Expand</button></div><div class="preview-scroll"><div class="paper-wrap"><article class="paper" id="resume-preview" aria-label="Resume document preview"></article></div></div><p class="preview-caption">Select a section or contribution to edit it. Layout guide; check final page breaks.</p><div class="preview-tip" id="preview-tip"></div></div></aside></main>
+</div>
+<dialog id="modal" aria-labelledby="modal-title"></dialog>
+<input type="file" accept=".json,application/json" id="import-file" class="file-input" aria-label="Open a Proof backup or assignment file">
+<div id="toast" class="toast" role="status" hidden></div><div id="print-root" hidden></div>
+<noscript><p style="padding:30px">Proof needs JavaScript to edit and export your resume. The downloaded app works without an internet connection.</p></noscript>
+<script id="proof-core">/* PROOF_CORE */</script>
+<script id="proof-content">/* PROOF_CONTENT */</script>
+<script id="proof-export">/* PROOF_EXPORT */</script>
+<script id="proof-ui">/* PROOF_UI */</script>
+</body></html>

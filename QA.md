@@ -1,28 +1,67 @@
-# Release verification
+# Proof 2.0 release verification
 
-Verified September 22, 2026 with fictional data only.
+Verified October 4, 2026 with fictional data only.
 
-## Cloudflare Pages packaging
+## Automated checks
 
-The GitHub version includes a Pages Wrangler configuration, Node 22 selection, and response headers that preserve the existing content security policy. Its production build runs the core tests and emits only `index.html` and `_headers`. It needs no installed dependencies to build. The app's editing and export code is unchanged from the verified release below. An actual Cloudflare deployment still requires connecting this GitHub repository in the Cloudflare dashboard.
+`npm test` assembles the complete application and runs 33 tests using Node built-ins. Coverage includes:
 
-## Passed
+- Version 1 migration, version 2 round trips, strict field and capacity validation, stable IDs, and referential integrity.
+- Independent resume selections, adapted wording, separate claim reviews, and public projection of proposal, simulation, and prototype labels.
+- Sentence assembly from supplied facts, visible writing feedback, bounded opportunity matches, interview prompts, and measurement arithmetic.
+- Local assignment handoff validation, new IDs, and unreviewed imported claims.
+- Actual OOXML structure, semantic headings and bullet lists, safe contact hyperlinks, Unicode/XML handling, ZIP checksums, page size, and entry pagination rules.
+- Private-note exclusion from resume exports, explicit private interview export opt-in, self-contained source assembly, and browser/hosting policies prohibiting connections.
 
-- Eight automated core tests covering draft assembly, private-note exclusion, hidden experiences, editable OOXML structure, Unicode/XML safety, ZIP checksums, backup validation, section ordering, template generation, and network restrictions.
-- Desktop browser flow: contact details, education, experience discovery, reflection prompts, editable bullet assembly, private evidence notes, claim confirmation, skills, and final review.
-- The live preview updated with the entered content. The five foundation checks reflected completed data and claim review.
-- Browser reload restored the fictional draft from local storage.
-- A 390 px iframe viewport (375 px usable width with scrollbar) displayed the responsive navigation and source cards without horizontal document overflow; the details form remained usable. An unlabeled mobile data-control button found during this check was fixed.
-- The sample Word résumé and blank Word template were rendered in LibreOffice and visually inspected. Each rendered to one clean US Letter page. Both contain selectable text, semantic headings, and true list bullets.
-- Production source has no remote script, image, font, API, or analytics dependencies. The content security policy blocks connections.
+`npm run build` passes and emits only `dist/index.html` and `dist/_headers`. Production packaging needs no installed dependencies, server, secrets, or runtime assets.
+
+## Browser regression
+
+The optional `scripts/browser-qa.mjs` runs 13 scenarios in headless Chromium with Playwright supplied separately. It serves the exact assembled HTML locally, drives native controls, saves actual downloads, and checks page errors and requests.
+
+Verified behavior:
+
+- A student captures a rough memory, switches discovery prompts, fills facts, compares and applies a bullet, and keeps private evidence. Clearing a memory does not restore deleted text.
+- Contact details, education, and skills update the preview. Skill connection checkboxes retain keyboard focus.
+- A named version adapts wording and reviews it independently. Manual opportunity links distinguish selected evidence from the collection.
+- Interview notes and the speaking timer work. Interview export excludes private notes by default and includes them only after explicit selection.
+- Actual Word, text, peer review, and PDF print outputs contain selected public content and exclude private sentinels. The printed PDF was also checked with text extraction.
+- JSON backup, reload, and backup replacement retain all versions, notes, selections, and links. The downloaded offline app contains no personal draft data and opens independently from a local file.
+- Removing a contribution cleans its links in every version and skill. Undo recovers those links and private notes. A named restore point recovers the full project.
+- Assignment imports reject malformed files before mutation, preview valid material, preserve simulation status, and leave new cards unselected and unreviewed.
+- Shared-device mode removes saved draft and restore-point data, leaves the current session editable, and still supports a portable backup.
+- Two tabs preserve their edits until an explicit conflict choice. Queued stale storage events are ignored. Restore points created in either tab are retained and visible when the data dialog opens.
+- Failed storage writes keep edits available and recover when saving becomes possible. Corrupt saved draft bytes remain intact and can be downloaded.
+- An existing version 1 browser draft migrates multiple bullets, private notes, skill names with parenthetical commas, inclusion, and presentation settings.
+- All eight sections fit 320, 390, 768, and 1440 px viewports. Populated evidence, skills, versions, interview, export, and full preview also fit narrow viewports. Save status and foundation progress remain visible. Dialog example selection retains keyboard focus; delayed search does not disturb navigation.
+- No page errors or application resource requests beyond the initial local documents occur.
+
+To rerun with separately installed Playwright and Chromium:
+
+```sh
+PROOF_PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
+PROOF_CHROMIUM_PATH=/absolute/path/to/chromium \
+npm run test:browser
+```
+
+`PROOF_QA_OUTPUT` optionally chooses a directory for the fictional downloads and screenshots. Otherwise the script uses a temporary directory. Browser tooling and QA artifacts are excluded from the production build.
+
+## Rendered Word verification
+
+Files generated by the current core and exporter were opened and rendered in LibreOffice. Every page was visually inspected:
+
+| Fixture | Result |
+| --- | --- |
+| Letter, Arial, comfortable spacing | One clean page |
+| A4, Georgia, compact spacing | One clean page |
+| Longer Letter resume, 863 words | Three clean pages |
+
+Project stage labels display beside context, accents and punctuation are preserved, entry headings and context stay with their first bullet, and later bullets can continue across pages. No clipping or missing text was found. ZIP integrity, XML parsing, and private-note searches passed for these files.
 
 ## Verification limits
 
-- The cloud browser confirmed that the export UI prepared the file, but its download-event API timed out before returning a saved file path. The actual exporter bytes were independently generated from the identical application core, tested for ZIP integrity and private-note exclusion, and rendered in LibreOffice.
-- Desktop Microsoft Word was not available. Pagination can differ across Word-compatible editors. Users should check final page breaks.
-- The browser did not expose `document.modelContext`. Optional WebMCP navigation registration could not be tested in a supported context. Ordinary app functionality does not depend on it.
-- Mobile checking used an actual browser iframe at narrow viewport width, not a physical phone. No formal accessibility certification is claimed.
+Microsoft Word and physical mobile devices were not available. Pagination can differ between compatible editors. Students should review final page breaks before submitting. Keyboard, focus, and responsive checks are not a formal accessibility certification.
 
-## Release contents
+A GitHub commit does not establish or verify a Cloudflare Pages deployment. The existing Pages configuration and privacy headers are preserved; an actual host deployment depends on the repository's hosting connection.
 
-The downloadable source archive contains the self-contained application, MIT license, development configuration, tests, contribution guidance, and product rationale. It excludes test student backups, private notes, dependency folders, Git credentials, and host-specific identity files.
+The local handoff contract is implemented in Proof. Other assignment tools need their own separately reviewed exporters. This release does not modify those tools or send student data anywhere.

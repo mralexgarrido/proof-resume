@@ -1,14 +1,86 @@
 # Proof
 
-An independent, open source résumé workshop for students. Turn real experiences into specific, defensible contributions, then export an editable Word document.
+An independent, open source resume workshop for students. Start with one rough memory, collect evidence of your contributions, and choose how to explain that work for each opportunity.
 
-**Open `index.html` in a modern browser. No installation, account, internet connection, or API key is needed.**
+**Open `index.html` in a modern browser. No installation, account, internet connection, API key, or AI service is needed.**
 
-![Proof résumé workshop](docs/proof-preview.jpg)
+![Proof student resume workshop](docs/proof-preview.png)
+
+Marketing and business examples lead, with prompts and practice projects for all majors. You supply the facts, write in your own voice, and decide what to share.
+
+## Student workflow
+
+1. **Capture one real moment.** Choose coursework, paid work, a student organization, volunteering, a personal project, or a family and community responsibility. Rough words are enough. Optional questions help you remember decisions, limitations, useful artifacts, and responsibilities.
+2. **Build your evidence collection.** Keep several contribution cards within one experience. Add your action, method, and actual result or deliverable. Assemble a draft from your answers or write the bullet yourself. Compare and edit the wording before using it.
+3. **Keep supporting details privately.** Record artifact references, measurement calculations, decisions, and lessons. Identify your own part in team work. Mark proposals, simulations, and prototypes accurately, then review the claim yourself.
+4. **Add details, education, and skills.** Connect each skill to contributions showing where you practiced it. Practice descriptions record your experience; they are not competence scores.
+5. **Create focused resume versions.** Each version keeps its own selected contributions and skills, headline, introduction, presentation settings, and optional adapted bullet wording. Adapted wording has its own claim review. The full collection remains available.
+6. **Map an opportunity manually.** Paste a description locally, select requirements, and link them to evidence. The app distinguishes evidence included in this version, evidence available in the collection, and requirements needing a connection. Literal phrase matches and a small bundled vocabulary suggest possible connections. You decide whether they are relevant.
+7. **Practice the interview.** Choose a contribution, review follow-up questions, keep private preparation notes, and use the speaking timer. Export questions separately, with an explicit choice to include private notes.
+8. **Review and export.** Reorder sections, choose Letter or A4, and download editable Word or plain text. Use browser print to save a PDF. A blank Word template and peer review copy are also available.
+
+The live preview shows the selected version. Empty contributions and sections are omitted. All examples and sample resumes are fictional and never prefill your work. The visible writing checks do not establish truth, predict employment, or calculate an ATS score.
+
+## Practice projects and assignment files
+
+Bundled project starters help you plan work you could complete and demonstrate. Saving a project plan records it privately. Add a contribution after doing the work; a plan is not automatically treated as an accomplishment.
+
+Proof previews compatible local `proof-evidence` version 1 JSON files. Imported cards start unreviewed and enter the collection without selection in a resume version. The student edits and selects them explicitly. See [the handoff specification](docs/handoff.md). This release does not add integrations to other assignment tools.
+
+## Saving, recovery, and privacy
+
+- The distributed HTML is self-contained: embedded CSS and JavaScript, system fonts, and no external assets, network calls, tracking, accounts, AI services, or server processing. Its CSP includes `connect-src 'none'` and `font-src 'none'`.
+- Optional local saving uses this browser's localStorage. It does not synchronize devices. Turn saving off on a shared computer; browser storage is not encrypted.
+- Undo and redo operate during the current session. Named restore points keep up to five copies of the whole project on this device. Downloaded JSON backups are separate portable files.
+- A project backup includes **all versions and private notes**. Resume Word, text, print, and peer review exports exclude evidence, reflection, interview notes, practice descriptions, and pasted opportunity descriptions.
+- Interview exports exclude private notes by default. You can explicitly include them for your own preparation.
+- Another tab's conflicting saved changes require a choice before overwriting. If saved data cannot be opened, the app offers the original stored text as a recovery download.
+- Version 1 Proof backups migrate into the expanded collection and first version, retaining bullets, private notes, inclusion choices, and claim reviews. Version 2 backups preserve stable links and version-specific wording. Invalid or oversized content is rejected rather than silently shortened.
+- **Download offline app** produces clean HTML without your personal data. Save a project backup separately to move your work.
+- A hosted copy requires an initial page request, which the host receives. The app itself does not upload resume data. Word contact links can open their destinations when a reader chooses them.
+
+Clearing saved copies removes device drafts and restore points while leaving the current session open. Download a backup before closing to keep that session's work.
+
+## Word output
+
+Word files are generated locally as Office Open XML in a ZIP container, with selectable text, semantic heading styles, real bullets, and clickable email and valid web contact links.
+
+Defaults are US Letter, a single column, Arial 11 pt, black text, and readable margins. Classic uses Georgia; compact uses 10.5 pt. A4 is available. Experience headings and context stay with the first bullet where the editor supports those layout settings. The preview is approximate, so review final page breaks in Word or another compatible editor before submitting.
+
+Clear headings and simple text are deliberate design choices, not a promise of universal applicant-tracking-system compatibility.
+
+## Source and development
+
+The editable source lives in `src/`:
+
+| File | Responsibility |
+| --- | --- |
+| `core.js` | Data model, validation, migration, resume projection, local coaching |
+| `content.js` | Bundled questions, verbs, fictional examples, projects, labels |
+| `export.js` | Local Word, text, and interview preparation exports |
+| `ui.js` | Interactions, local saving, recovery, workflow |
+| `styles.css` | Responsive application, preview, and print styles |
+| `shell.html` | Application shell and assembly placeholders |
+
+`scripts/assemble.mjs` combines these sources into the committed, self-contained `index.html`. There are zero runtime dependencies. Edit source files, then reassemble; direct edits to generated `index.html` will be overwritten.
+
+```sh
+npm test
+npm run build
+```
+
+Tests and production packaging use Node built-ins, so those commands need no dependency installation. Development requires Node 22.13+. The optional Vite server uses development dependencies:
+
+```sh
+npm ci
+npm run dev
+```
+
+The production CSP blocks Vite's injected client. After editing source, run `npm run assemble` and refresh the browser manually. The assembled app can be opened directly without Node.
 
 ## Deploy to Cloudflare Pages
 
-In Cloudflare, choose **Workers & Pages → Create application → Pages → Import an existing Git repository** and connect `mralexgarrido/proof-resume`.
+Choose **Workers & Pages → Create application → Pages → Import an existing Git repository** and connect `mralexgarrido/proof-resume`.
 
 | Setting | Value |
 | --- | --- |
@@ -16,85 +88,26 @@ In Cloudflare, choose **Workers & Pages → Create application → Pages → Imp
 | Framework preset | `None` |
 | Build command | `npm run build` |
 | Build output directory | `dist` |
-| Root directory | Leave blank, using the repository root |
-| Node version | Node 22, selected by `.node-version` |
+| Root directory | Repository root |
+| Node version | Node 22.13+ |
 | Secrets and runtime variables | None required |
 
-`npm run build` runs the eight core tests, then creates `dist/index.html` and `dist/_headers`. A failing test stops the build. The production build and tests use only Node built-ins; dependency installation is needed only for the optional Vite development server. For faster Pages builds, you may set the build environment variable `SKIP_DEPENDENCY_INSTALL=1`.
+The build assembles the app, runs automated tests, and produces only `dist/index.html` and `dist/_headers`. A failing test stops it. For Pages builds without dependency installation, you can set `SKIP_DEPENDENCY_INSTALL=1`.
 
-The repository includes `wrangler.jsonc` with `pages_build_output_dir: "./dist"`. This is a **Pages** project. Select the Pages Git integration rather than a Workers deployment flow. No Worker entrypoint, Pages Functions, database, API keys, or deploy command is needed in the Pages Git setup.
+Use the Pages Git integration. No Worker entrypoint, Pages Functions, database, API keys, or deploy command is needed. Leave Web Analytics and script injection disabled to preserve the no-external-calls requirement.
 
-Leave Cloudflare Web Analytics and other script injection disabled to preserve the application's no-external-calls requirement. The app's content security policy blocks remote scripts and connections.
+Once connected, Cloudflare supplies a deployment URL and publishes successful builds from the production branch. A GitHub commit alone does not create a Pages project. See Cloudflare's [static HTML guide](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/) and [build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/).
 
-After connecting the repository, Cloudflare supplies the deployment URL and publishes successful builds from `main`. A GitHub commit alone does not create or connect a Cloudflare Pages project. See [Cloudflare's static HTML guide](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/), [build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/), and [build environment](https://developers.cloudflare.com/pages/configuration/build-image/).
+Other static hosts can serve the generated app. Deploy only `dist`; keep source, tests, documentation, and screenshots in the repository. Never commit real student backups or resumes.
 
-## Why this exists
+## Testing and limitations
 
-The hardest part of a first résumé often happens before the writing: recognizing what counts as experience and finding the evidence behind it. Proof helps students work through that step. Marketing and business examples lead the experience, with prompts for all majors.
+`npm test` covers validation, legacy migration, stable references, independent variants, sentence assembly, opportunity matching, measurement arithmetic, handoff imports, Word structure, hyperlink safety, Unicode/XML safety, ZIP checksums, private-note exclusion, and network restrictions. Browser and rendered-document checks are recorded in [QA.md](QA.md).
 
-This is a general résumé builder. It does not scrape job postings, generate AI claims, or calculate a supposed hiring probability.
+An optional `npm run test:browser` exercises the student workflow, downloads, recovery, privacy, and responsive layouts with a separately supplied Playwright and Chromium installation. It is not part of production packaging; see [QA.md](QA.md) for setup.
 
-## Student workflow
+The app includes labeled controls, keyboard-accessible navigation and dialogs, visible focus states, a skip link, responsive layouts, reduced-motion support, and status announcements. This is not a formal accessibility certification.
 
-1. Discover experience in coursework, paid work, clubs, volunteering, personal projects, or family and community responsibilities.
-2. Add contact details and education.
-3. Describe your action, method, and outcome. Assemble an editable bullet from your own answers, or write it directly.
-4. Keep private notes about the evidence and judgment behind your work. Review your claims.
-5. Add concrete skills and relevant highlights.
-6. Reorder sections, choose typography and spacing, and download a `.docx` file.
+Scope is English-language resumes for students and early-career applicants. Proof is not a full academic CV builder. It does not import Word/PDF files, synchronize devices, infer truth, or assess interviews automatically. Its writing checks are visible rules, not a general grammar engine.
 
-The live preview shows a skeleton until you add content. Empty sections and private notes are excluded from résumé exports. A separate blank Word template is also available. All examples are fictional and never prefill your own résumé.
-
-## Privacy and offline use
-
-- The distributed HTML is self-contained: embedded CSS and JavaScript, system fonts, no external assets, network calls, tracking, accounts, AI services, or server processing.
-- A content security policy includes `connect-src 'none'` and `font-src 'none'`.
-- Local saving uses this browser's localStorage. It does not sync between devices. Users can turn it off and clear the saved draft.
-- On shared computers, turn local saving off. Browser storage is not encrypted and should not be treated as a secure vault.
-- A JSON backup includes both résumé data and private evidence notes. A Word export includes only résumé content.
-- The “Download offline app” action produces a clean HTML application without the user's draft. Save a backup separately to move the draft.
-- Hosting the page means the host receives the initial page request and ordinary connection metadata. The app itself does not upload résumé data.
-- Optional browser-native WebMCP registration exposes only section navigation. It does not read résumé content, send requests, or export files. It is feature-detected and unnecessary for normal use.
-
-## Word output
-
-Word documents are generated locally as standards-based Office Open XML in a ZIP container. The exporter uses real paragraphs, heading styles, and numbered-list bullet definitions. Content is selectable and editable; it is not an image or an HTML file renamed `.docx`.
-
-Defaults: US Letter, a single column, Arial 11 pt, black text, and generous margins. Classic uses Georgia; compact uses 10.5 pt. The browser preview is approximate. Word and other editors can paginate differently, so review the final file before submitting.
-
-The app does not promise universal applicant-tracking-system compatibility. Clear headings and simple text are deliberate design choices, not an ATS certification.
-
-## Source and development
-
-`index.html` is the complete application and source. There are zero runtime dependencies. It contains a pure `proof-core` script and a DOM-based `proof-ui` script. The pure core is shared by the UI and tests.
-
-```sh
-npm ci
-npm run dev
-npm test
-npm run build
-```
-
-Node 22.13+ is required for development. Vite is a development-only dependency. After running the core tests, the build copies the self-contained application to `dist/index.html` and the Cloudflare header rules to `dist/_headers`. It adds no bundled assets or runtime network dependencies. You can run the application without Node by opening the HTML directly.
-
-The strict production CSP intentionally blocks Vite's injected development client. Editing the source requires a manual browser refresh. This keeps the tested app's privacy policy intact.
-
-## Deploy anywhere
-
-Upload `dist/index.html` to any static host, including GitHub Pages, Cloudflare Pages, or a university web server. No backend, secrets, database, or build service is needed. Use `npm run build` if a host expects a build command and choose `dist` as its output directory.
-
-Only the generated `dist` directory should be deployed. The source, tests, documentation, and example screenshot stay in the repository. Do not commit real student backup files or generated résumés.
-
-## Testing
-
-`npm test` checks evidence-only sentence assembly, backup validation, Unicode/XML safety, ZIP checksums, editable Word structure, private-note exclusion, hidden-entry exclusion, section ordering, and the absence of network APIs or remote assets. Manual browser and export checks are recorded in `QA.md`.
-
-## Accessibility and limitations
-
-The app uses labeled native controls, keyboard-accessible navigation and dialogs, visible focus states, a skip link, responsive layouts, reduced-motion support, and status announcements. This is not a claim of a formal accessibility certification.
-
-Current scope is English-language, general student and early-career résumés. It is not a full academic CV builder. It does not import Word/PDF files, synchronize devices, or infer the truth of a user's claims. Feedback is transparent rule-based coaching, not a grammar engine. JSON backups from other versions or products are intentionally rejected.
-
-## License and contribution
-
-MIT licensed. See `LICENSE`, `CONTRIBUTING.md`, and `docs/product-rationale.md`. Adapt it for a classroom, translate prompts, or improve the editor while preserving the offline and privacy requirements.
+MIT licensed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [the product rationale](docs/product-rationale.md).

@@ -1,67 +1,92 @@
-# Proof 2.0 release verification
+# Proof 2.1 local verification
 
-Verified October 4, 2026 with fictional data only.
+Checked October 5, 2026 with fictional data only. Release metadata is 2.1.0; the project backup schema remains version 2.
+
+This log records local release verification. Production deployment is checked separately against the Cloudflare Pages result for the published commit.
 
 ## Automated checks
 
-`npm test` assembles the complete application and runs 33 tests using Node built-ins. Coverage includes:
+`npm test` assembles the complete application and runs 40 passing tests using Node built-ins. Coverage includes:
 
-- Version 1 migration, version 2 round trips, strict field and capacity validation, stable IDs, and referential integrity.
-- Independent resume selections, adapted wording, separate claim reviews, and public projection of proposal, simulation, and prototype labels.
-- Sentence assembly from supplied facts, visible writing feedback, bounded opportunity matches, interview prompts, and measurement arithmetic.
-- Local assignment handoff validation, new IDs, and unreviewed imported claims.
-- Actual OOXML structure, semantic headings and bullet lists, safe contact hyperlinks, Unicode/XML handling, ZIP checksums, page size, and entry pagination rules.
-- Private-note exclusion from resume exports, explicit private interview export opt-in, self-contained source assembly, and browser/hosting policies prohibiting connections.
+- Version 1 migration, lossless version 2 round trips, stable IDs, strict capacity validation, and linked evidence integrity.
+- Independent selections, adapted wording and reviews, proposal/simulation/prototype labels, and exclusion of private or unselected content.
+- Fact-based sentence assembly, transparent opportunity suggestions, measurement arithmetic, and numeric coaching that distinguishes actual quantities from tool names or dimensional labels.
+- Pure export-review suggestions with exact targets for missing details, optional dates, unreviewed selected claims, and repeated wording. These leave the state and five foundation checks unchanged.
+- Strict local assignment handoffs with new IDs and unreviewed claims.
+- Editable OOXML structure, semantic headings, real bullets, safe hyperlinks, Unicode/XML handling, ZIP checksums, Letter/A4 settings, and entry pagination rules.
+- Explicit private interview export opt-in, source assembly, and application/hosting policies prohibiting external connections.
 
-`npm run build` passes and emits only `dist/index.html` and `dist/_headers`. Production packaging needs no installed dependencies, server, secrets, or runtime assets.
+`npm run build` passes and emits only `dist/index.html` and `dist/_headers`; browser tooling and QA artifacts are excluded.
 
-## Browser regression
+## Browser suites
 
-The optional `scripts/browser-qa.mjs` runs 13 scenarios in headless Chromium with Playwright supplied separately. It serves the exact assembled HTML locally, drives native controls, saves actual downloads, and checks page errors and requests.
+The optional suites serve the exact assembled HTML locally and drive native controls through headless Chromium with Playwright supplied separately.
 
-Verified behavior:
+| Suite | October 5 status | Scope |
+| --- | --- | --- |
+| `test:browser` | 13 scenarios passed | Existing workflow, downloads, privacy, storage, migration, and responsive regression |
+| `test:reliability` | 12 scenarios passed | Saving boundaries, immediate Undo, history recovery, and delayed import handling |
+| `test:review` | 9 scenarios passed | Live wording/reviews, shared versus adapted scope, private reflection, adapted-only interviews, long content, continuation, export targets, evidence filters/search, and direct requirement actions |
 
-- A student captures a rough memory, switches discovery prompts, fills facts, compares and applies a bullet, and keeps private evidence. Clearing a memory does not restore deleted text.
-- Contact details, education, and skills update the preview. Skill connection checkboxes retain keyboard focus.
-- A named version adapts wording and reviews it independently. Manual opportunity links distinguish selected evidence from the collection.
-- Interview notes and the speaking timer work. Interview export excludes private notes by default and includes them only after explicit selection.
-- Actual Word, text, peer review, and PDF print outputs contain selected public content and exclude private sentinels. The printed PDF was also checked with text extraction.
-- JSON backup, reload, and backup replacement retain all versions, notes, selections, and links. The downloaded offline app contains no personal draft data and opens independently from a local file.
-- Removing a contribution cleans its links in every version and skill. Undo recovers those links and private notes. A named restore point recovers the full project.
-- Assignment imports reject malformed files before mutation, preview valid material, preserve simulation status, and leave new cards unselected and unreviewed.
-- Shared-device mode removes saved draft and restore-point data, leaves the current session editable, and still supports a portable backup.
-- Two tabs preserve their edits until an explicit conflict choice. Queued stale storage events are ignored. Restore points created in either tab are retained and visible when the data dialog opens.
-- Failed storage writes keep edits available and recover when saving becomes possible. Corrupt saved draft bytes remain intact and can be downloaded.
-- An existing version 1 browser draft migrates multiple bullets, private notes, skill names with parenthetical commas, inclusion, and presentation settings.
-- All eight sections fit 320, 390, 768, and 1440 px viewports. Populated evidence, skills, versions, interview, export, and full preview also fit narrow viewports. Save status and foundation progress remain visible. Dialog example selection retains keyboard focus; delayed search does not disturb navigation.
-- No page errors or application resource requests beyond the initial local documents occur.
+### Existing workflow regression
 
-To rerun with separately installed Playwright and Chromium:
+The passing 13-scenario suite verifies rough memory capture, prompt changes, clearing text, sentence comparison, contact and education updates, skill links, independent versions, interview notes and timer, and real Word/text/peer-review/print downloads.
+
+It also verifies backups, reload, clean offline downloads, contribution removal and undo, restore points, unreviewed/unselected assignment imports, shared-device mode, cross-tab conflicts, failed storage writes, corrupt draft recovery, and version 1 migration.
+
+The eight sections and populated workflows fit 320, 390, 768, and 1440 px viewports. Checks include keyboard focus, delayed search, dialog selection, and absence of page errors or application resource requests beyond the initial local documents. Downloaded public outputs exclude private sentinel text.
+
+### Reliability regression
+
+The passing 12-scenario suite verifies:
+
+- Copied hidden control characters are cleaned at entry so saving, backups, and reload remain usable. A first edit enables Undo immediately; a replacement edit clears Redo.
+- Modal memory input cannot introduce an unsavable hidden character.
+- Damaged restore-point history does not disable saving, reload, or backup of a valid main project.
+- An oversized selected opportunity requirement must be shortened explicitly before saving, with no silent truncation.
+- The largest accepted revision does not overflow into an invalid persisted project.
+- Closing an import while a file is still reading cannot reopen a cancelled preview.
+- Overlapping assignment and backup reads keep the latest candidate and ignore an older successful read.
+- An older rejected read cannot erase or dismiss a newer import preview. Opening another dialog cancels the earlier pending read.
+- Duplicating a maximum-length version name preserves complete Unicode characters and a valid project.
+- If a restore point cannot be saved, resetting or opening another backup first prepares a portable backup of the original project, including private notes. The damaged restore-point history remains available and the new project saves correctly.
+
+### Review and usability regression
+
+The passing 9-scenario suite verifies live row wording and claim status without losing focus; private reflection/theme edits preserving a reviewed claim; shared and adapted reviews remaining independent; practice and private-safe export of adapted-only wording; and permitted long names and URLs wrapping in mobile views and full preview.
+
+It also verifies the Continue action, exact export-review targets, evidence modes and search, and direct requirement inclusion and wording actions. Filters update when a student changes inclusion. Review buttons remain readable on desktop; permitted long names and links wrap without clipping at 320, 390, and 768 px across all eight views and full preview. No page errors or external resource requests occurred.
+
+### Rerunning the suites
+
+Supply Playwright and Chromium separately:
 
 ```sh
-PROOF_PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
-PROOF_CHROMIUM_PATH=/absolute/path/to/chromium \
+export PROOF_PLAYWRIGHT_MODULE=/absolute/path/to/playwright
+export PROOF_CHROMIUM_PATH=/absolute/path/to/chromium
 npm run test:browser
+npm run test:review
+npm run test:reliability
 ```
 
-`PROOF_QA_OUTPUT` optionally chooses a directory for the fictional downloads and screenshots. Otherwise the script uses a temporary directory. Browser tooling and QA artifacts are excluded from the production build.
+`PROOF_QA_OUTPUT` can select the directory for fictional downloads and screenshots in the browser and review suites. Their default is a temporary directory. Browser tooling is not installed into or shipped with the production app.
 
-## Rendered Word verification
+## Historical rendered Word checks, October 4
 
-Files generated by the current core and exporter were opened and rendered in LibreOffice. Every page was visually inspected:
+The exporter implementation is unchanged for this update. The following checks were performed for 2.0 on October 4, 2026, not rerendered as new October 5 evidence. Generated files were opened in LibreOffice and every page was visually inspected:
 
-| Fixture | Result |
+| Fixture | October 4 result |
 | --- | --- |
 | Letter, Arial, comfortable spacing | One clean page |
 | A4, Georgia, compact spacing | One clean page |
 | Longer Letter resume, 863 words | Three clean pages |
 
-Project stage labels display beside context, accents and punctuation are preserved, entry headings and context stay with their first bullet, and later bullets can continue across pages. No clipping or missing text was found. ZIP integrity, XML parsing, and private-note searches passed for these files.
+Those checks found readable stage labels, preserved accents and punctuation, headings/context kept with their first bullet, later bullets continuing across pages, and no clipping or missing text. ZIP integrity, XML parsing, and private-note searches passed. The current automated exporter tests remain passing.
 
 ## Verification limits
 
-Microsoft Word and physical mobile devices were not available. Pagination can differ between compatible editors. Students should review final page breaks before submitting. Keyboard, focus, and responsive checks are not a formal accessibility certification.
+Microsoft Word and physical mobile devices were not available. Compatible editors can paginate differently, so students should check final page breaks. Keyboard, focus, and responsive checks are not a formal accessibility certification.
 
-A GitHub commit does not establish or verify a Cloudflare Pages deployment. The existing Pages configuration and privacy headers are preserved; an actual host deployment depends on the repository's hosting connection.
+Local tests alone do not establish a production deployment. The existing Pages packaging and privacy headers are preserved. Direct retrieval of the live Pages interface is blocked in this environment; Cloudflare deployment status is available through the repository checks.
 
-The local handoff contract is implemented in Proof. Other assignment tools need their own separately reviewed exporters. This release does not modify those tools or send student data anywhere.
+The local handoff contract is implemented in Proof. Other assignment tools need their own separately reviewed exporters. This update does not modify those tools, call AI services, or send student data elsewhere.

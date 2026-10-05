@@ -6,9 +6,9 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const KEY = 'proof-resume-v2', OLD_KEY = 'proof-resume-v1', HISTORY_KEY = 'proof-resume-recovery-v2', MODE_KEY = 'proof-save-mode';
   const pages = [['discover','Discover'],['details','Your details'],['education','Education'],['library','My evidence'],['skills','Skills'],['versions','Resume versions'],['interview','Interview practice'],['finish','Export']];
-  let state = C.blank(), page = 'discover', openExperience = null, openContribution = null, search = '', filter = 'all';
-  let remember = true, lastStored = null, conflict = false, dirty = false, storageError = '', notice = '', saveTimer, toastTimer;
-  let undo = [], redo = [], snapshots = [], pendingImport = null, importMode = 'backup', editSession = null, modalReturn = null;
+  let state = C.blank(), page = 'discover', openExperience = null, openContribution = null, search = '', filter = 'all', libraryMode = 'all';
+  let remember = true, lastStored = null, conflict = false, dirty = false, storageError = '', historyError = '', notice = '', saveTimer, toastTimer;
+  let undo = [], redo = [], snapshots = [], pendingImport = null, importMode = 'backup', importRequest = 0, editSession = null, modalReturn = null;
   let discovery = null, lens = null, exampleIndex = 0, interviewId = null, timerHandle = null, elapsed = 0;
   try {
     lastStored = localStorage.getItem(KEY);
@@ -19,11 +19,15 @@
     }
     remember = state.remember;
     if (sessionStorage.getItem(MODE_KEY) === 'session') remember = false;
-    const storedHistory = localStorage.getItem(HISTORY_KEY);
-    if (storedHistory && remember) snapshots = normalizeSnapshots(JSON.parse(storedHistory));
   } catch (error) {
     remember = false;
     storageError = 'Saved work could not be opened. It is still in browser storage. Download a copy before clearing it.';
+  }
+  if(remember)try {
+    const storedHistory=localStorage.getItem(HISTORY_KEY);
+    if(storedHistory)snapshots=normalizeSnapshots(JSON.parse(storedHistory));
+  } catch {
+    historyError='Your draft is open and can still save. Older restore points could not be read; their saved copy is available to download.';
   }
   state.remember = remember;
   const v = () => C.variant(state);
@@ -42,12 +46,22 @@
     $('#status-label').textContent = message;
     $('#save-state').classList.toggle('conflict',warn);
   }
-  function takeUndo() {
-    undo.push(JSON.stringify(state)); if (undo.length > 35) undo.shift();
+  function syncHistoryButtons() {
+    document.querySelectorAll('[data-action="undo"]').forEach(el=>el.disabled=!undo.length);
+    document.querySelectorAll('[data-action="redo"]').forEach(el=>el.disabled=!redo.length);
+  }
+  function takeUndo(snapshot=JSON.stringify(state)) {
+    undo.push(snapshot); if (undo.length > 35) undo.shift();
     redo = []; editSession = null;
+    syncHistoryButtons();
   }
   function change(fn, options = {}) {
-    takeUndo(); fn(); save(); render(options.focus || false, options.target);
+    const before=JSON.stringify(state),view={page,openExperience,openContribution,search,filter,libraryMode};
+    try{fn();C.normalize(state);}catch(error){
+      state=JSON.parse(before);({page,openExperience,openContribution,search,filter,libraryMode}=view);
+      throw error;
+    }
+    takeUndo(before);save();render(options.focus || false,options.target);
   }
   function historyButtons() {
     return '<div class="page-actions"><button class="btn compact" data-action="undo" '+(!undo.length?'disabled':'')+'>↶ Undo</button><button class="btn compact" data-action="redo" '+(!redo.length?'disabled':'')+'>↷ Redo</button><button class="btn compact" data-action="snapshot">Save a restore point</button><button class="btn compact" data-action="data">Backup &amp; restore</button></div>';
@@ -71,8 +85,8 @@
       }
       const checked = C.normalize(state);
       let storedRevision=0;try{storedRevision=Number(JSON.parse(current)?.revision)||0;}catch{}
-      checked.revision = Math.max(Number(state.revision)||0,storedRevision) + 1; checked.updatedAt = new Date().toISOString();
-      const serialized = JSON.stringify(checked); localStorage.setItem(KEY,serialized); lastStored = serialized;
+      checked.revision = Math.min(Number.MAX_SAFE_INTEGER,Math.max(Number(state.revision)||0,storedRevision) + 1); checked.updatedAt = new Date().toISOString();
+      const serialized = JSON.stringify(C.normalize(checked)); localStorage.setItem(KEY,serialized); lastStored = serialized;
       dirty = false;
       state.revision = checked.revision; state.updatedAt = checked.updatedAt;
       status('Saved');
@@ -134,11 +148,45 @@
   function banner() {
     if (conflict) return '<div class="notice" role="status"><strong>Another tab has saved changes.</strong> Your current edits are still here. Save a backup, then choose which work to continue.<br><button class="btn compact" data-action="backup">Back up this draft</button><button class="btn compact" data-action="load-other">Open saved changes</button><button class="btn compact" data-action="keep-current">Keep this draft instead</button></div>';
     if (storageError) return '<div class="notice">'+esc(storageError)+'<br><button class="btn compact" data-action="recover-raw">Download saved copy</button><button class="btn compact" data-action="data">Manage saved work</button></div>';
+    if (historyError) return '<div class="notice">'+esc(historyError)+'<br><button class="btn compact" data-action="recover-history">Download restore-point copy</button><button class="btn compact" data-action="data">Backup &amp; restore</button></div>';
     if (notice) return '<div class="notice good">'+esc(notice)+' <button class="btn link" data-action="dismiss">Dismiss</button></div>';
     return '';
   }
+  function targetButton(target,label,classes='btn') {
+    return '<button class="'+classes+'" data-action="review-target" data-target="'+esc(JSON.stringify(target))+'">'+esc(label)+'</button>';
+  }
+  function continueCard() {
+    if(!cards().length&&!state.contact.name.trim()&&!state.education.length&&!state.skills.length)return '';
+    const draft=cards().find(({contribution:c})=>!c.text.trim()&&!Object.hasOwn(v().overrides,c.id)&&(c.action.trim()||c.reflection.trim()));
+    const issue=C.exportReview(state)[0];
+    const target=draft?{page:'library',entity:'contribution',id:draft.contribution.id,key:'action'}:issue?.target || {page:'finish'};
+    const title=draft?'Turn a memory into your next bullet':issue?.text || 'Read your resume and make it yours';
+    const detail=draft?'Your notes are saved. Add what you did, how you did it, and what you delivered.':issue?.detail || 'Your basic information is in place. Review the wording, then download an editable copy.';
+    return '<section class="continue-card"><p class="eyebrow">CONTINUE '+esc(v().name)+'</p><h2>'+esc(title)+'</h2><p>'+esc(detail)+'</p><div class="button-group">'+targetButton(target,'Continue my resume','btn primary')+'<button class="btn" data-action="navigate" data-page="finish">Review this version</button></div></section>';
+  }
+  function reviewCenter() {
+    const issues=C.exportReview(state);
+    return '<section class="review-center"><h2>Before you share this version</h2><p class="subtle-note">'+(issues.length?issues.length+' items to consider. Open any item to work on that exact part. You can download a draft at any time.':'The checks below found no missing basics or unreviewed selected claims. Read the final wording and check the layout before sharing.')+'</p>'+
+      issues.map(issue=>'<article class="review-item"><div><h3>'+esc(issue.text)+'</h3><p>'+esc(issue.detail)+'</p></div>'+targetButton(issue.target,issue.kind==='missing'?'Add detail':'Review','btn compact')+'</article>').join('')+'</section>';
+  }
+  function followTarget(target) {
+    closeModal();
+    if(target.page==='library') {
+      search='';filter='all';libraryMode='all';
+      if(target.entity==='experience')openExperience=target.id;
+      else if(target.id){const item=findCard(target.id);if(item){openContribution=target.id;openExperience=item.experience.id;}}
+    }
+    navigate(target.page);
+    if(target.action==='version-wording'){wordingModal(target.id);return;}
+    if(['add-education','add-skill'].includes(target.action)){$('#editor [data-action="'+target.action+'"]')?.click();return;}
+    if(target.entity) {
+      const field=[...$('#editor').querySelectorAll('[data-entity]')].find(el=>el.dataset.entity===target.entity&&(!target.id||el.dataset.id===target.id)&&el.dataset.key===target.key);
+      if(field){field.closest('details')?.setAttribute('open','');field.focus();}
+    }
+  }
   function discoverView() {
     return head('01 / START WITH WHAT YOU KNOW','You have more to work with<br>than you think.','You do not need the perfect words yet. Choose somewhere you contributed, then capture one real moment.')+
+      continueCard()+
       '<div class="source-grid">'+Object.entries(C.SOURCES).map(([key,s])=>'<button class="source-card" data-action="discover-source" data-source="'+key+'"><span class="source-icon" aria-hidden="true">'+({course:'▤',work:'▣',campus:'◎',volunteer:'♡',personal:'✦',community:'⌂'}[key])+'</span><span class="plus" aria-hidden="true">+</span><strong>'+esc(s.label)+'</strong><p>'+esc(s.description)+'</p></button>').join('')+'</div>'+
       '<div class="insight"><div><strong>A useful contribution can be ordinary.</strong><p>Think of something you made clearer, organized, finished, maintained, or helped someone understand. We will help you find the details.</p></div></div>'+
       '<div class="page-actions"><button class="btn" data-action="examples">Show me examples</button><button class="btn" data-action="projects">Help me build new evidence</button><button class="btn" data-action="import-assignment">Open an assignment file</button></div>'+
@@ -173,7 +221,7 @@
   function contributionForm(e,c) {
     const override = Object.hasOwn(v().overrides,c.id);
     return '<div class="contribution-edit" id="edit-'+c.id+'">'+
-      field('contribution',c.id,'text','Your resume bullet',c.text,{area:true,finished:true,max:C.LIMITS.text,hint:'Edit in your own voice. This is the shared version of this accomplishment.'})+
+      field('contribution',c.id,'text',override?'Shared resume bullet':'Your resume bullet',c.text,{area:true,finished:true,max:C.LIMITS.text,hint:override?'Shared wording is available to your other versions. Review the adapted wording below for the current resume.':'Edit in your own voice. Versions without adapted wording use this shared bullet.'})+
       '<p class="word-count" id="words-'+c.id+'">'+c.text.trim().split(/\s+/).filter(Boolean).length+' words</p>'+
       (override?'<div class="notice">This resume version uses different wording for this accomplishment. <button class="btn link" data-action="version-wording" data-id="'+c.id+'">Review version wording</button></div>':'')+
       '<div class="feedback" id="feedback-'+c.id+'">'+C.feedback(c,c.text).map(x=>'<p class="'+(x.good?'good':'')+'">'+(x.good?'✓ ':'○ ')+esc(x.text)+'</p>').join('')+'</div>'+
@@ -188,17 +236,35 @@
       field('contribution',c.id,'attribution','Your contribution',c.attribution,{select:itemOptions(P.attribution)})+
       field('contribution',c.id,'tags','Skills or themes to remember',c.tags.join(', '),{optional:true,hint:'Separate with commas, for example: research, communication, budgeting.'})+
       '<button class="btn compact mt16" data-action="metric" data-id="'+c.id+'">Check a measurement</button></div></details>'+
-      '<div class="form-divider">'+check('contribution',c.id,'reviewed','I can explain this contribution and support this claim.',c.reviewed)+'</div>'+
+      '<div class="form-divider">'+check('contribution',c.id,'reviewed','I reviewed the shared wording and can explain and support this claim.',c.reviewed)+'</div>'+
       '<div class="button-group"><button class="btn compact" data-action="version-wording" data-id="'+c.id+'">Wording for this version</button><button class="btn compact" data-action="practice" data-id="'+c.id+'">Practice explaining it</button><button class="btn compact danger" data-action="remove-contribution" data-id="'+c.id+'">Remove from collection</button></div></div>';
   }
   function feedbackHTML(c) {
     return C.feedback({...c,reviewed:reviewedFor(c)},textFor(c)).map(x=>'<p class="'+(x.good?'good':'')+'">'+(x.good?'✓ ':'○ ')+esc(x.text)+'</p>').join('');
   }
+  function syncClaim(id) {
+    const c=findCard(id)?.contribution;if(!c)return;
+    const text=$('#claim-text-'+id),label=$('#claim-state-'+id);
+    if(text)text.textContent=textFor(c)||c.action||'A memory waiting for your words.';
+    if(label)label.textContent=(reviewedFor(c)?'Claim reviewed':'Claim to review')+(Object.hasOwn(v().overrides,id)?' · Version wording':'')+(c.evidence?' · Supporting note saved':'');
+    const shared=document.querySelector('[data-entity="contribution"][data-id="'+id+'"][data-key="reviewed"]');
+    if(shared)shared.checked=c.reviewed;
+  }
+  function matchesLibraryMode(c) {
+    if(libraryMode==='selected')return chosen(c.id);
+    if(libraryMode==='unselected')return !chosen(c.id);
+    if(libraryMode==='review')return !!textFor(c).trim()&&!reviewedFor(c);
+    if(libraryMode==='draft')return !textFor(c).trim();
+    return true;
+  }
   function libraryView() {
     const query=search.toLowerCase();
-    const entries=state.experiences.filter(e=>(filter==='all'||e.source===filter)&&(!query||[e.role,e.organization,...e.contributions.map(c=>c.text+' '+c.action+' '+c.tags.join(' '))].join(' ').toLowerCase().includes(query)));
+    const matching=c=>[textFor(c),c.text,c.action,c.method,c.result,c.evidence,c.reflection,c.tags.join(' ')].join(' ').toLowerCase().includes(query);
+    const visible=e=>e.contributions.filter(c=>matchesLibraryMode(c)&&(!query||[e.role,e.organization].join(' ').toLowerCase().includes(query)||matching(c)));
+    const entries=state.experiences.filter(e=>(filter==='all'||e.source===filter)&&(visible(e).length||(!e.contributions.length&&libraryMode==='all'&&(!query||[e.role,e.organization].join(' ').toLowerCase().includes(query)))));
     return head('04 / YOUR EVIDENCE COLLECTION','Keep the accomplishments.<br>Choose the best ones.','Collect work, projects, and everyday contributions here. Checked bullets appear in '+esc(v().name)+'. Everything else stays available for later.')+
       '<div class="toolbar"><label for="library-search" class="sr-only">Search your evidence</label><input id="library-search" value="'+esc(search)+'" placeholder="Find a project, skill, or contribution"><label for="library-filter" class="sr-only">Experience source</label><select id="library-filter"><option value="all">All experiences</option>'+Object.entries(C.SOURCES).map(([key,s])=>'<option value="'+key+'" '+(filter===key?'selected':'')+'>'+esc(s.label)+'</option>').join('')+'</select></div>'+
+      '<div class="toolbar"><label for="library-mode">Show</label><select id="library-mode">'+[['all','All contributions'],['selected','In this resume'],['unselected','Not selected'],['review','Claims to review'],['draft','Draft memories']].map(([key,label])=>'<option value="'+key+'" '+(key===libraryMode?'selected':'')+'>'+label+'</option>').join('')+'</select><p class="subtle-note">'+entries.reduce((n,e)=>n+visible(e).length,0)+' of '+cards().length+' contributions shown</p></div>'+
       '<div class="page-actions"><button class="btn primary" data-action="choose-source">+ Find another experience</button><button class="btn" data-action="import-assignment">Open an assignment file</button><button class="btn" data-action="navigate" data-page="versions">Choose resume version</button></div>'+
       (!state.experiences.length?'<div class="empty-state"><h2>Start with one real moment.</h2><p>A project, a shift at work, a club event, or a family responsibility can give you somewhere to begin.</p><button class="btn primary" data-action="choose-source">Find an experience</button></div>':
       !entries.length?'<div class="empty-state"><h2>No matching experiences yet.</h2><p>Try another word or select all experiences.</p></div>':'')+
@@ -212,10 +278,10 @@
       field('experience',e.id,'section','Resume section',e.section,{select:[['experience','Experience'],['projects','Projects'],['leadership','Leadership & Service']]})+'</div>'+
       '<p class="subtle-note">Describe coursework, prototypes, and simulated campaigns as the work you completed. Your decisions and deliverables can demonstrate real skills.</p>'+
       '<div class="button-group"><button class="btn compact" data-action="move-experience" data-id="'+e.id+'" data-dir="-1">↑ Move up</button><button class="btn compact" data-action="move-experience" data-id="'+e.id+'" data-dir="1">↓ Move down</button><button class="btn compact danger" data-action="remove-experience" data-id="'+e.id+'">Remove experience</button></div><div class="form-divider"></div></div>'+
-      e.contributions.map((c,i)=>'<div class="contribution '+(chosen(c.id)?'selected':'')+'" id="card-'+c.id+'"><div class="contribution-row">'+check('selection',c.id,'included','<span class="sr-only">Include contribution '+(i+1)+' from '+esc(e.organization || C.SOURCES[e.source].label)+' in '+esc(v().name)+'</span>',chosen(c.id))+
-      '<div><p>'+esc(textFor(c) || c.action || 'A memory waiting for your words.')+'</p><p class="subtle-note">'+(reviewedFor(c)?'Claim reviewed':'Claim to review')+(c.evidence?' · Supporting note saved':'')+'</p></div><button class="btn compact" data-action="edit-contribution" data-id="'+c.id+'" aria-expanded="'+(openContribution===c.id)+'">Edit</button></div>'+
+      visible(e).map(c=>{const i=e.contributions.indexOf(c);return '<div class="contribution '+(chosen(c.id)?'selected':'')+'" id="card-'+c.id+'"><div class="contribution-row">'+check('selection',c.id,'included','<span class="sr-only">Include contribution '+(i+1)+' from '+esc(e.organization || C.SOURCES[e.source].label)+' in '+esc(v().name)+'</span>',chosen(c.id))+
+      '<div><p id="claim-text-'+c.id+'">'+esc(textFor(c) || c.action || 'A memory waiting for your words.')+'</p><p class="subtle-note" id="claim-state-'+c.id+'">'+(reviewedFor(c)?'Claim reviewed':'Claim to review')+(Object.hasOwn(v().overrides,c.id)?' · Version wording':'')+(c.evidence?' · Supporting note saved':'')+'</p></div><button class="btn compact" data-action="edit-contribution" data-id="'+c.id+'" aria-expanded="'+(openContribution===c.id)+'">Edit</button></div>'+
       (openContribution===c.id?contributionForm(e,c):'')+
-      '<div class="mini-actions" style="padding:0 12px 10px"><button class="icon-btn" data-action="move-contribution" data-id="'+c.id+'" data-dir="-1" aria-label="Move contribution up" '+(i===0?'disabled':'')+'>↑</button><button class="icon-btn" data-action="move-contribution" data-id="'+c.id+'" data-dir="1" aria-label="Move contribution down" '+(i===e.contributions.length-1?'disabled':'')+'>↓</button><button class="btn subtle compact" data-action="duplicate-contribution" data-id="'+c.id+'">Duplicate</button></div></div>').join('')+
+      '<div class="mini-actions" style="padding:0 12px 10px"><button class="icon-btn" data-action="move-contribution" data-id="'+c.id+'" data-dir="-1" aria-label="Move contribution up" '+(i===0?'disabled':'')+'>↑</button><button class="icon-btn" data-action="move-contribution" data-id="'+c.id+'" data-dir="1" aria-label="Move contribution down" '+(i===e.contributions.length-1?'disabled':'')+'>↓</button><button class="btn subtle compact" data-action="duplicate-contribution" data-id="'+c.id+'">Duplicate</button></div></div>';}).join('')+
       '<button class="add-btn" data-action="add-contribution" data-id="'+e.id+'">+ Add a contribution from this experience</button></div></article>').join('')+
       '<p class="subtle-note">Move entries within a section into the order you want employers to read. Your full collection stays here even when a bullet is hidden from a resume version.</p>'+next('education','skills','Connect my skills');
   }
@@ -250,11 +316,24 @@
         const included=linked.filter(x=>chosen(x.contribution.id)&&textFor(x.contribution).trim());
         const matches=C.requirementMatches(state,r.text);
         return '<article class="requirement-card" id="requirement-'+r.id+'"><div class="requirement-head"><h3>'+esc(r.text)+'</h3><span class="tag '+(included.length?'green':linked.length?'':'amber')+'">'+(included.length?'Evidence included':linked.length?'Evidence available':'Choose evidence')+'</span></div>'+
-          (linked.length?'<p class="subtle-note">'+linked.length+' example'+(linked.length===1?'':'s')+' connected'+(!included.length?'. Select a connected bullet in My evidence to include it in this version.':'.')+'</p>':'<p class="subtle-note">Which contribution could help you demonstrate this requirement?</p>')+
+          '<div class="requirement-evidence">'+requirementEvidence(r)+'</div>'+
           '<details><summary>Choose supporting contributions</summary><p class="subtle-note">Possible connections use words and a small local vocabulary. You decide which examples genuinely support this requirement.</p><div class="evidence-link-list">'+
-          cards().filter(x=>x.contribution.text||x.contribution.action).map(({experience:e,contribution:c})=>check('requirement-link',r.id,c.id,esc((c.text||c.action).slice(0,160))+(matches.includes(c.id)?' <span class="tag">Possible text connection</span>':'')+'<br><span class="muted">'+esc(e.organization || C.SOURCES[e.source].label)+'</span>',r.contributionIds.includes(c.id))).join('')+'</div></details>'+
+          cards().filter(x=>textFor(x.contribution)||x.contribution.action).map(({experience:e,contribution:c})=>check('requirement-link',r.id,c.id,esc((textFor(c)||c.action).slice(0,160))+(matches.includes(c.id)?' <span class="tag">Possible text connection</span>':'')+'<br><span class="muted">'+esc(e.organization || C.SOURCES[e.source].label)+'</span>',r.contributionIds.includes(c.id))).join('')+'</div></details>'+
           '<button class="btn subtle compact danger mt16" data-action="remove-requirement" data-id="'+r.id+'">Remove requirement</button></article>';
       }).join('');
+  }
+  function requirementEvidence(r) {
+    const linked=cards().filter(x=>r.contributionIds.includes(x.contribution.id));
+    if(!linked.length)return '<p class="subtle-note">Which contribution could help you demonstrate this requirement?</p>';
+    return '<p class="subtle-note">'+linked.length+' connected example'+(linked.length===1?'':'s')+'. Choose what belongs in this resume.</p><div class="evidence-link-list">'+linked.map(({contribution:c})=>'<div class="connected-evidence"><p>'+esc(textFor(c)||c.action||'Finish this contribution in My evidence.')+'</p>'+check('selection',c.id,'included','Include in '+esc(v().name),chosen(c.id))+'<button class="btn compact" data-action="version-wording" data-id="'+c.id+'">Edit wording for this version</button></div>').join('')+'</div>';
+  }
+  function refreshRequirementStatus() {
+    for(const r of v().requirements) {
+      const node=$('#requirement-'+r.id+' .requirement-head .tag');if(!node)continue;
+      const included=r.contributionIds.some(id=>{const item=findCard(id);return item&&chosen(id)&&textFor(item.contribution).trim();});
+      node.textContent=included?'Evidence included':r.contributionIds.length?'Evidence available':'Choose evidence';
+      node.className='tag '+(included?'green':r.contributionIds.length?'':'amber');
+    }
   }
   function versionsView() {
     return head('06 / RESUME VERSIONS','Choose what this opportunity<br>needs to see.','Keep a general resume and make focused versions. Your full evidence collection stays available while each version keeps its own selection and wording.')+
@@ -266,7 +345,7 @@
       requirementsView()+next('skills','finish','Review and export');
   }
   function interviewView() {
-    const available=cards().filter(x=>x.contribution.text.trim());
+    const available=cards().filter(x=>textFor(x.contribution).trim());
     if (!available.some(x=>x.contribution.id===interviewId)) interviewId=available.find(x=>chosen(x.contribution.id))?.contribution.id || available[0]?.contribution.id || null;
     const card=findCard(interviewId);
     return head('07 / INTERVIEW PRACTICE','Be ready to explain your words.','Choose a contribution and practice the story behind it. Your answers stay private and never appear on your resume.')+
@@ -287,7 +366,7 @@
     return head('08 / REVIEW AND EXPORT','Make it unmistakably yours.','Read the selected version as someone meeting you for the first time. Take an editable copy and check its final layout.')+
       '<p class="tag">'+esc(v().name)+'</p><p class="finish-intro mt16">'+a.filter(x=>x.ready).length+' of '+a.length+' foundations ready. These checks show the presence of basic content and your claim review.</p>'+
       a.map(item=>'<div class="check-card '+(item.ready?'ready':'')+'"><span class="check-icon" aria-hidden="true">'+(item.ready?'✓':'○')+'</span><div><h3>'+esc(item.name)+'</h3><p>'+esc(item.ready?'In place for this version.':item.description)+'</p></div><button class="btn subtle compact" data-action="navigate" data-page="'+item.step+'">'+(item.ready?'Edit':'Review')+'</button></div>').join('')+
-      (selected.some(x=>!x.experience.role.trim()&&!x.experience.organization.trim())?'<div class="notice">One selected contribution needs an experience name so readers can understand its context. <button class="btn link" data-action="navigate" data-page="library">Add the context</button></div>':'')+
+      reviewCenter()+
       '<div class="subheading"><h2>Presentation for this version</h2><p>Use clear headings and readable type. Your content remains selectable and editable.</p></div><div class="compact-grid">'+
       field('variant',v().id,'style','Type style',v().style,{select:[['modern','Modern · Arial'],['classic','Classic · Georgia']]})+
       field('variant',v().id,'density','Spacing',v().density,{select:[['comfortable','Comfortable'],['compact','Compact']]})+
@@ -330,7 +409,7 @@
     if (focus) { $('#editor h1')?.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});$('.nav-step.active')?.scrollIntoView({block:'nearest',inline:'nearest'}); }
     else if (fieldToken&&!target) {
       const el=[...document.querySelectorAll('[data-entity]')].find(x=>x.dataset.entity===fieldToken.entity&&x.dataset.id===fieldToken.id&&x.dataset.key===fieldToken.key);
-      el?.focus({preventScroll:true});
+      (el || $('#editor h1'))?.focus({preventScroll:true});
       if(el&&typeof fieldToken.start==='number'&&el.setSelectionRange&&(['text','email','tel','search'].includes(el.type)||el.tagName==='TEXTAREA'))try{el.setSelectionRange(fieldToken.start,fieldToken.end);}catch{}
     } else if (token) {
       const candidates=[...$('#editor').querySelectorAll('[data-action]')];
@@ -345,6 +424,7 @@
     editSession=null;page=key;render(true);
   }
   function modal(title,body,options={}) {
+    if(!options.preserveImport){importRequest++;pendingImport=null;}
     const m=$('#modal');
     if (!m.open) modalReturn=document.activeElement;
     m.className=options.preview?'dialog-preview':'';
@@ -352,7 +432,13 @@
     if (!m.open) m.showModal();
     if (options.focus) $('#'+options.focus)?.focus();
   }
-  function closeModal() {$('#modal').close();if(modalReturn?.isConnected)modalReturn.focus({preventScroll:true});else $('#editor h1')?.focus({preventScroll:true});}
+  function closeModal() {
+    const m=$('#modal'),wording=m.open&&m.querySelector('[data-entity="override"]');
+    const returnToken=modalReturn?.dataset.action?{action:modalReturn.dataset.action,id:modalReturn.dataset.id}:null;
+    importRequest++;pendingImport=null;m.close();
+    if(wording){render(false,returnToken);return;}
+    if(modalReturn?.isConnected)modalReturn.focus({preventScroll:true});else $('#editor h1')?.focus({preventScroll:true});
+  }
   function confirm(title,message,action,id='') {
     modal(title,'<p class="dialog-copy">'+esc(message)+'</p><div class="dialog-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="'+action+'" data-id="'+esc(id)+'">Continue</button></div>');
   }
@@ -416,6 +502,7 @@
       '<p class="dialog-copy">Keep the same underlying facts while choosing how to explain them for this opportunity. This wording belongs only to this resume version.</p>'+
       '<p class="subtle-note">Shared wording: '+esc(c.text || '(Not yet written)')+'</p>'+
       field('override',id,'text','Wording in this version',textFor(c),{area:true,max:C.LIMITS.text})+
+      '<div class="feedback" id="override-feedback">'+feedbackHTML(c)+'</div>'+
       '<div class="mt16">'+check('override-review',id,'reviewed','I reviewed this version of the claim and can support it.',adapted?v().reviewedOverrides.includes(id):c.reviewed)+'</div>'+
       '<div class="dialog-actions"><button class="btn" data-action="clear-override" data-id="'+id+'" '+(!adapted?'disabled':'')+'>Use shared wording</button><button class="btn primary" data-action="close-wording">Done</button></div>');
   }
@@ -439,6 +526,7 @@
       '<p class="dialog-copy">Your work stays on this device. A project backup lets you continue elsewhere and includes your private evidence and interview notes.</p>'+
       '<div class="data-row"><div><strong>Remember on this device</strong><p>Turn off on a shared computer. Browser data is device-local and not encrypted.</p></div><label class="switch-label"><input id="remember-toggle" type="checkbox" '+(remember?'checked':'')+'><span>Save locally</span></label></div>'+
       '<div class="data-row"><div><strong>Download a project backup</strong><p>Includes all resume versions, evidence, and private notes.</p></div><button class="btn" data-action="backup">Save backup</button></div>'+
+      (historyError?'<div class="notice">'+esc(historyError)+'<br><button class="btn" data-action="recover-history">Download restore-point copy</button></div>':'')+
       '<div class="data-row"><div><strong>Open a project backup</strong><p>Preview before replacing your current work. Older Proof backups are supported.</p></div><button class="btn" data-action="import-backup">Open backup</button></div>'+
       '<div class="data-row"><div><strong>Open an assignment file</strong><p>Add contributions from a compatible local file after reviewing them.</p></div><button class="btn" data-action="import-assignment">Open assignment</button></div>'+
       '<div class="data-row"><div><strong>Download the offline app</strong><p>A clean copy without your personal data. Save your project backup separately.</p></div><button class="btn" data-action="offline">Save app</button></div>'+
@@ -490,6 +578,14 @@
     const c=findCard(id)?.contribution;if(c)c.reviewed=false;
     if (allVersions) for (const item of state.variants) item.reviewedOverrides=item.reviewedOverrides.filter(x=>x!==id);
   }
+  function cleanCopiedText(el) {
+    const original=el.value;
+    const cleaned=original.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g,' ').replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g,'\ufffd');
+    if(cleaned===original)return;
+    const start=el.selectionStart,end=el.selectionEnd;el.value=cleaned;
+    if(typeof start==='number')try{el.setSelectionRange(start,end);}catch{}
+    toast('Cleaned an unsupported hidden character from the copied text so your work can save. Please check the wording.');
+  }
   function update(el) {
     const {entity,id,key}=el.dataset;
     let value=el.type==='checkbox'?el.checked:el.value;
@@ -520,13 +616,14 @@
     } else if(entity==='override') {
       v().overrides[id]=value;v().reviewedOverrides=v().reviewedOverrides.filter(x=>x!==id);
       const box=$('#modal [data-entity="override-review"]');if(box)box.checked=false;
+      const clear=$('#modal [data-action="clear-override"]');if(clear)clear.disabled=false;
     } else if(entity==='override-review') {
       if(Object.hasOwn(v().overrides,id))v().reviewedOverrides=value?[...new Set([...v().reviewedOverrides,id])]:v().reviewedOverrides.filter(x=>x!==id);
       else {const c=findCard(id)?.contribution;if(c)c.reviewed=value;}
     } else {
       if(!target||!Object.hasOwn(target,key))return;
       target[key]=value;
-      if(entity==='contribution'&&key!=='reviewed') {
+      if(entity==='contribution'&&['text','action','method','result','evidence','attribution'].includes(key)) {
         invalidate(id,key!=='text');
         const box=document.querySelector('[data-entity="contribution"][data-id="'+id+'"][data-key="reviewed"]');if(box)box.checked=false;
       }
@@ -536,6 +633,13 @@
       }
     }
     save();nav();preview();
+    if(['contribution','override','override-review'].includes(entity))syncClaim(id);
+    if(entity==='experience')target.contributions.forEach(c=>syncClaim(c.id));
+    if(entity==='selection')document.querySelectorAll('[data-entity="selection"][data-id="'+id+'"]').forEach(box=>box.checked=chosen(id));
+    if(['selection','override','override-review'].includes(entity))refreshRequirementStatus();
+    if(['override','override-review'].includes(entity)) {
+      const notes=$('#override-feedback');if(notes)notes.innerHTML=feedbackHTML(findCard(id).contribution);
+    }
     if(entity==='contribution') {
       const card=findCard(id),notes=$('#feedback-'+id),words=$('#words-'+id);
       if(notes)notes.innerHTML=C.feedback(card.contribution,card.contribution.text).map(x=>'<p class="'+(x.good?'good':'')+'">'+(x.good?'✓ ':'○ ')+esc(x.text)+'</p>').join('');
@@ -546,6 +650,7 @@
   function attachContribution(e,c) {
     if(e.contributions.length>=C.LIMITS.contributionsPerExperience||cards().length>=C.LIMITS.contributions)throw new Error('This collection has reached its contribution limit. Save a backup and start another project.');
     e.contributions.push(c);v().contributionIds.push(c.id);openExperience=e.id;openContribution=c.id;
+    search='';filter='all';libraryMode='all';
   }
   function removeContribution(id) {
     for(const e of state.experiences)e.contributions=e.contributions.filter(c=>c.id!==id);
@@ -566,21 +671,22 @@
     to.push(JSON.stringify(state));state=C.normalize(JSON.parse(from.pop()));state.remember=remember;editSession=null;save();render();
     toast(direction==='undo'?'Change undone.':'Change restored.');
   }
-  function openImport(mode) {importMode=mode;$('#import-file').value='';$('#import-file').click();}
-  async function readImport(file) {
+  function openImport(mode) {importRequest++;pendingImport=null;importMode=mode;$('#import-file').value='';$('#import-file').click();}
+  async function readImport(file,mode,request) {
     if(file.size>C.LIMITS.backupBytes)throw new Error('Choose a file smaller than '+Math.floor(C.LIMITS.backupBytes/1000000)+' MB.');
-    const raw=JSON.parse(await file.text());
-    if(importMode==='assignment') {
+    const text=await file.text();if(request!==importRequest)return;
+    const raw=JSON.parse(text);
+    if(mode==='assignment') {
       const experiences=C.normalizeHandoff(raw);
       if(state.experiences.length+experiences.length>C.LIMITS.experiences||cards().length+experiences.reduce((n,e)=>n+e.contributions.length,0)>C.LIMITS.contributions)throw new Error('This assignment would exceed the collection limit.');
       pendingImport={kind:'assignment',experiences};
       modal('Review the assignment before adding it.',
-        '<p class="dialog-copy">These contributions will be added to your collection. Review and edit the claims in your own words before using them.</p><div class="import-preview">'+experiences.map(e=>'<h3>'+esc(e.organization)+'</h3><p class="tag">'+esc(statusLabel(e.status))+'</p>'+e.contributions.map(c=>'<p>'+esc(c.text || c.action)+'</p>').join('')).join('')+'</div><p class="subtle-note">Imported claims start unreviewed. Private notes stay out of resume exports.</p><div class="dialog-actions"><button class="btn" data-action="cancel-import">Cancel</button><button class="btn primary" data-action="confirm-import">Add these contributions</button></div>');
+        '<p class="dialog-copy">These contributions will be added to your collection. Review and edit the claims in your own words before using them.</p><div class="import-preview">'+experiences.map(e=>'<h3>'+esc(e.organization)+'</h3><p class="tag">'+esc(statusLabel(e.status))+'</p>'+e.contributions.map(c=>'<p>'+esc(c.text || c.action)+'</p>').join('')).join('')+'</div><p class="subtle-note">Imported claims start unreviewed. Private notes stay out of resume exports.</p><div class="dialog-actions"><button class="btn" data-action="cancel-import">Cancel</button><button class="btn primary" data-action="confirm-import">Add these contributions</button></div>',{preserveImport:true});
     } else {
       const candidate=C.normalize(raw);
       pendingImport={kind:'backup',state:candidate};
       modal('Review this project backup.',
-        '<p class="dialog-copy">Open '+esc(candidate.contact.name || 'this student project')+' with '+candidate.experiences.length+' experiences and '+candidate.variants.length+' resume versions? Your current project will be replaced. A restore point will preserve it.</p><div class="dialog-actions"><button class="btn" data-action="cancel-import">Cancel</button><button class="btn" data-action="backup">Back up current work</button><button class="btn primary" data-action="confirm-import">Open this project</button></div>');
+        '<p class="dialog-copy">Open '+esc(candidate.contact.name || 'this student project')+' with '+candidate.experiences.length+' experiences and '+candidate.variants.length+' resume versions? Your current project will be replaced. A recovery copy of your current work will be prepared first.</p><div class="dialog-actions"><button class="btn" data-action="cancel-import">Cancel</button><button class="btn" data-action="backup">Back up current work</button><button class="btn primary" data-action="confirm-import">Open this project</button></div>',{preserveImport:true});
     }
   }
   function interviewExportModal() {
@@ -601,6 +707,7 @@
   }
   document.addEventListener('focusin',e=>{if(e.target.matches('[data-entity]'))editSession=null;});
   document.addEventListener('input',e=>{
+    if(e.target.matches('input:not([type="file"]):not([type="checkbox"]),textarea'))cleanCopiedText(e.target);
     if(e.target.matches('[data-entity]')&&e.target.type!=='checkbox'&&e.target.tagName!=='SELECT')update(e.target);
   });
   document.addEventListener('focusout',e=>{
@@ -619,17 +726,19 @@
         if(node)node.textContent=skill.contributionIds.length+' contributions connected.';
       }
       if(el.dataset.entity==='requirement-link') {
-        const r=v().requirements.find(x=>x.id===el.dataset.id),linked=r.contributionIds.length,included=r.contributionIds.some(x=>{const item=findCard(x);return item&&chosen(x)&&textFor(item.contribution).trim();}),node=el.closest('.requirement-card')?.querySelector('.requirement-head .tag');
-        if(node){node.textContent=included?'Evidence included':linked?'Evidence available':'Choose evidence';node.className='tag '+(included?'green':linked?'':'amber');}
+        const r=v().requirements.find(x=>x.id===el.dataset.id),node=el.closest('.requirement-card')?.querySelector('.requirement-evidence');
+        if(node)node.innerHTML=requirementEvidence(r);refreshRequirementStatus();
       }
+      if(page==='library'&&((el.dataset.entity==='selection'&&['selected','unselected'].includes(libraryMode))||(el.dataset.entity==='contribution'&&el.dataset.key==='reviewed'&&libraryMode==='review')))render();
     }
     if(el.id==='library-filter'){filter=el.value;render();$('#library-filter').focus();}
+    if(el.id==='library-mode'){libraryMode=el.value;render();$('#library-mode').focus();}
     if(el.id==='practice-contribution'){interviewId=el.value;elapsed=0;if(timerHandle){clearInterval(timerHandle);timerHandle=null;}render();$('#practice-contribution').focus();}
     if(el.id==='remember-toggle') {
       remember=el.checked;state.remember=remember;
       try{sessionStorage.setItem(MODE_KEY,remember?'local':'session');}catch{}
       if(!remember) {
-        clearTimeout(saveTimer);conflict=false;snapshots=[];
+        clearTimeout(saveTimer);conflict=false;snapshots=[];historyError='';
         try{localStorage.removeItem(KEY);localStorage.removeItem(OLD_KEY);localStorage.removeItem(HISTORY_KEY);lastStored=null;}catch{toast('Use browser settings to clear saved copies if storage cannot be removed.');}
         status('Session only');toast('Device saving is off. Save a project backup before closing.');
       } else {
@@ -651,13 +760,15 @@
   });
   $('#import-file').addEventListener('change',async e=>{
     const file=e.target.files?.[0];if(!file)return;
-    try{await readImport(file);}catch(error){pendingImport=null;toast(error.message || 'This file could not be opened. Your current work is unchanged.');}
+    const request=++importRequest,mode=importMode;
+    try{await readImport(file,mode,request);}catch(error){if(request!==importRequest)return;pendingImport=null;toast(error.message || 'This file could not be opened. Your current work is unchanged.');}
   });
   document.addEventListener('click',event=>{
     const b=event.target.closest('[data-action]');if(!b||b.disabled)return;
     const action=b.dataset.action,id=b.dataset.id;
     try {
       if(action==='navigate') {closeModal();navigate(b.dataset.page);}
+      else if(action==='review-target')followTarget(JSON.parse(b.dataset.target));
       else if(action==='close-modal')closeModal();
       else if(action==='dismiss'){notice='';render();}
       else if(action==='data')dataModal();
@@ -674,7 +785,7 @@
         if(!discovery?.memory.trim()){toast('Write one thing you did. Rough words are enough to begin.');$('#discovery-memory').focus();return;}
         if(!canAddExperience())throw new Error('Save a backup and start another project before adding more experiences.');
         const e=C.experience(discovery.source),c=C.contribution();c.action=discovery.memory.trim();c.method=discovery.method.trim();c.result=discovery.result.trim();
-        change(()=>{state.experiences.push(e);attachContribution(e,c);openExperience=null;page='library';search='';filter='all';},{focus:true});closeModal();
+        change(()=>{state.experiences.push(e);attachContribution(e,c);openExperience=null;page='library';search='';filter='all';libraryMode='all';},{focus:true});closeModal();
         document.getElementById('edit-'+c.id)?.scrollIntoView({block:'start',behavior:'instant'});
         document.getElementById('f-contribution-'+c.id+'-action')?.focus({preventScroll:true});
         toast('Memory saved. Add the details, then build or write your bullet.');
@@ -682,7 +793,7 @@
       else if(action==='toggle-experience'){openExperience=openExperience===id?null:id;render();}
       else if(action==='edit-contribution'){openContribution=openContribution===id?null:id;render();}
       else if(action==='preview-edit'||action==='return-to-contribution') {
-        closeModal();const item=findCard(id);if(!item)return;page='library';search='';filter='all';openContribution=id;openExperience=item.experience.id;render();
+        closeModal();const item=findCard(id);if(!item)return;page='library';search='';filter='all';libraryMode='all';openContribution=id;openExperience=item.experience.id;render();
         document.getElementById('edit-'+id)?.scrollIntoView({block:'start',behavior:'instant'});
         if(b.dataset.focus==='facts') {
           const field=document.getElementById('f-contribution-'+id+'-action');if(field){field.closest('details').open=true;field.focus({preventScroll:true});}
@@ -767,7 +878,7 @@
       }
       else if(action==='duplicate-variant') {
         if(state.variants.length>=C.LIMITS.variants)throw new Error('This project has reached its resume-version limit.');
-        const item=structuredClone(v());item.id=C.id();item.name=item.name.slice(0,C.LIMITS.contact-5)+' copy';item.requirements.forEach(r=>r.id=C.id());
+        const item=structuredClone(v());item.id=C.id();item.name=item.name.slice(0,C.LIMITS.contact-5).replace(/[\ud800-\udbff]$/,'')+' copy';item.requirements.forEach(r=>r.id=C.id());
         change(()=>{state.variants.push(item);state.selectedVariantId=item.id;});toast('A separate copy of this resume version is ready.');
       }
       else if(action==='remove-variant')confirm('Remove this resume version?','Your evidence collection remains available. You can undo the removal.','confirm-remove-variant',v().id);
@@ -780,6 +891,7 @@
       }
       else if(action==='confirm-requirement') {
         const text=$('#requirement-text').value.trim();if(!text){toast('Enter one requirement to connect to your evidence.');return;}
+        if(text.length>C.LIMITS.field){toast('Select one focused requirement. Shorten it to '+C.LIMITS.field+' characters or fewer before adding it.');$('#requirement-text').focus();return;}
         change(()=>v().requirements.push({id:C.id(),text,contributionIds:[]}));closeModal();
       }
       else if(action==='remove-requirement')change(()=>{v().requirements=v().requirements.filter(x=>x.id!==id);});
@@ -805,7 +917,7 @@
       else if(action==='start-project') {
         if(!canAddExperience())throw new Error('This project has reached its experience limit.');
         const item=P.projects[Number(b.dataset.index)],e=C.experience('personal'),c=C.contribution();e.organization=item.title;e.status='proposal';c.reflection='Project plan: '+item.prompt;
-        change(()=>{state.experiences.push(e);attachContribution(e,c);page='library';filter='all';search='';},{focus:true});closeModal();toast('Project plan saved privately. Add your contribution as you complete the work.');
+        change(()=>{state.experiences.push(e);attachContribution(e,c);page='library';filter='all';search='';libraryMode='all';},{focus:true});closeModal();toast('Project plan saved privately. Add your contribution as you complete the work.');
       }
       else if(action==='export-word')exportWord();
       else if(action==='template')exportWord(true);
@@ -818,14 +930,15 @@
       else if(action==='cancel-import'){pendingImport=null;closeModal();}
       else if(action==='confirm-import') {
         if(!pendingImport)return;
-        const incoming=pendingImport;
+        const incoming=pendingImport;let savedRestore=true;
         if(incoming.kind==='backup') {
-          preserve('Before opening a backup');takeUndo();state=incoming.state;state.remember=remember;openContribution=null;openExperience=null;page='versions';
+          savedRestore=preserve('Before opening a backup');if(!savedRestore)backup();
+          takeUndo();state=incoming.state;state.remember=remember;openContribution=null;openExperience=null;page='versions';
         }else {
           takeUndo();for(const e of incoming.experiences){state.experiences.push(e);}
-          page='library';filter='all';search='';openExperience=incoming.experiences[0].id;openContribution=incoming.experiences[0].contributions[0].id;
+          page='library';filter='all';search='';libraryMode='all';openExperience=incoming.experiences[0].id;openContribution=incoming.experiences[0].contributions[0].id;
         }
-        pendingImport=null;save();render(true);closeModal();toast(incoming.kind==='backup'?'Project opened. Your previous work has a restore point.':'Assignment added. Review the contributions before exporting.');
+        pendingImport=null;save();render(true);closeModal();toast(incoming.kind==='backup'?(savedRestore?'Project opened. Your previous work has a restore point on this device.':'Project opened. A portable backup of your previous work was prepared. Keep that downloaded file for recovery.'):'Assignment added. Review the contributions before exporting.');
       }
       else if(action==='undo')restoreUndo('undo');
       else if(action==='redo')restoreUndo('redo');
@@ -833,11 +946,12 @@
       else if(action==='confirm-snapshot'){const name=$('#snapshot-name').value.trim()||'Restore point',saved=preserve(name);closeModal();toast(saved?'Restore point saved on this device.':'Restore point kept for this session. Save a project backup before closing.');}
       else if(action==='restore-snapshot')confirm('Restore this project?','This replaces the current project with the selected restore point. You can undo it during this session.','confirm-restore-snapshot',b.dataset.index);
       else if(action==='confirm-restore-snapshot'){const s=snapshots[Number(id)];if(!s)return;takeUndo();state=C.normalize(s.data);state.remember=remember;openContribution=null;openExperience=null;save();render(true);closeModal();toast('Restore point opened.');}
-      else if(action==='reset')confirm('Start a new project?','Save a backup if you want a portable copy. A restore point will preserve the current project on this device.','confirm-reset');
-      else if(action==='confirm-reset'){preserve('Before starting fresh');takeUndo();state=C.blank();state.remember=remember;openExperience=null;openContribution=null;page='discover';save();render(true);closeModal();toast('New project started. Undo and restore points are available.');}
+      else if(action==='reset')confirm('Start a new project?','Save a backup if you want a portable copy. A recovery copy of the current project will be prepared first.','confirm-reset');
+      else if(action==='confirm-reset'){const savedRestore=preserve('Before starting fresh');if(!savedRestore)backup();takeUndo();state=C.blank();state.remember=remember;openExperience=null;openContribution=null;page='discover';save();render(true);closeModal();toast(savedRestore?'New project started. Undo and a restore point on this device are available.':'New project started. A portable backup of your previous work was prepared. Keep that downloaded file for recovery.');}
       else if(action==='clear-storage')confirm('Clear saved copies from this device?','This removes saved drafts and restore points, including older Proof drafts. Your current session and downloaded files remain.','confirm-clear-storage');
-      else if(action==='confirm-clear-storage'){clearTimeout(saveTimer);localStorage.removeItem(KEY);localStorage.removeItem(OLD_KEY);localStorage.removeItem(HISTORY_KEY);snapshots=[];lastStored=null;remember=false;state.remember=false;conflict=false;storageError='';try{sessionStorage.setItem(MODE_KEY,'session');}catch{}status('Session only');closeModal();render();toast('Saved copies cleared. Download a backup before closing this session.');}
+      else if(action==='confirm-clear-storage'){clearTimeout(saveTimer);localStorage.removeItem(KEY);localStorage.removeItem(OLD_KEY);localStorage.removeItem(HISTORY_KEY);snapshots=[];lastStored=null;remember=false;state.remember=false;conflict=false;storageError='';historyError='';try{sessionStorage.setItem(MODE_KEY,'session');}catch{}status('Session only');closeModal();render();toast('Saved copies cleared. Download a backup before closing this session.');}
       else if(action==='recover-raw'){const raw=localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY);if(raw)download(raw,'Proof-Saved-Recovery.json','application/json');else toast('No saved copy was found.');}
+      else if(action==='recover-history'){const raw=localStorage.getItem(HISTORY_KEY);if(raw)download(raw,'Proof-Restore-Points-Recovery.json','application/json');else toast('No saved restore points were found.');}
       else if(action==='load-other')confirm('Open the changes saved in another tab?','Save a backup of this draft first if you want to keep it.','confirm-load-other');
       else if(action==='confirm-load-other'){clearTimeout(saveTimer);const raw=localStorage.getItem(KEY);if(!raw)throw new Error('The saved draft was removed. Back up your current work or keep this draft instead.');const incoming=C.normalize(JSON.parse(raw));takeUndo();state=incoming;state.remember=remember;lastStored=raw;conflict=false;dirty=false;openContribution=null;openExperience=null;closeModal();render(true);status('Saved');}
       else if(action==='keep-current')confirm('Keep this draft as the saved project?','The changes saved by the other tab will be replaced. Download a backup first if you want both.','confirm-keep-current');
@@ -854,7 +968,7 @@
   });
   window.addEventListener('pagehide',flush);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
-  $('#modal').addEventListener('close',()=>{pendingImport=null;});
+  $('#modal').addEventListener('cancel',event=>{event.preventDefault();closeModal();});
   render();
   status(remember?'Saved':'Session only',!!storageError);
   if(remember&&!lastStored&&notice)save();

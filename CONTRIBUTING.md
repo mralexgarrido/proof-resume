@@ -9,6 +9,8 @@ Useful contributions include clearer reflection questions, cross-major examples,
 - Never invent accomplishments, numbers, or outcomes. Identify proposals, simulations, and prototypes as that kind of work.
 - Preserve the student's voice and choices. Examples stay clearly fictional. Sentence assembly uses supplied facts and remains editable.
 - Keep the evidence collection separate from resume versions. Versions have independent selections, adapted wording, and reviews. Shared fact changes must invalidate affected claim reviews.
+- Identify which wording an edit or review affects. Private reflection and retrieval tags must not revoke a public claim review. Keep live summaries and review status consistent with the active version without moving keyboard focus.
+- Keep continuation and export suggestions specific and actionable. A missing detail can lead to its exact field, but must not block downloading a draft or become an automatic grade.
 - Keep private evidence, reflection, and interview notes out of resume Word, text, print, and peer review exports. Backups include private notes. Interview exports require an explicit choice to include them.
 - Opportunity mapping stays transparent and student controlled. Phrase and vocabulary matches suggest connections without asserting qualification or producing ATS or hiring scores.
 - Skill practice descriptions record the student's experience. They are not inferred proficiency ratings.
@@ -16,6 +18,7 @@ Useful contributions include clearer reflection questions, cross-major examples,
 - Assignment handoffs follow [the strict local contract](docs/handoff.md), receive new IDs, start unreviewed, and remain unselected until the student chooses them.
 - Keep Word exports editable, with semantic headings, real bullets, safe contact links, and Letter/A4 support.
 - Keep recovery predictable. Do not silently overwrite another tab's saved work or remove a user's only recoverable stored copy.
+- Validate new input before it can make the project unsavable. Cancelled or outdated file reads must not reopen a preview or replace a newer import. Damaged restore-point history must not disable a valid main project.
 
 ## Source workflow
 
@@ -23,12 +26,14 @@ Edit modules in `src/`. `npm run assemble` generates self-contained `index.html`
 
 Runtime dependencies are not allowed. Development tooling stays separate from shipped HTML. The production CSP blocks Vite's client, so source changes require reassembly and a manual refresh.
 
+The release version is 2.1.0; the backup schema remains version 2. A release version change alone must not change the data format or invalidate existing backups.
+
 ## Before submitting a change
 
 1. Explain the student problem, resulting behavior, and affected workflow.
 2. Run `npm test` and `npm run build`.
 3. Check the first-memory path, keyboard use, a narrow viewport, and a normal laptop viewport.
-4. For data or workflow changes, verify relevant migrations, stable links, variant selections and wording, reviews, undo, and recovery.
+4. For data or workflow changes, verify relevant migrations, stable links, variant selections and wording, reviews, immediate Undo, recovery, cancelled imports, and copied input. Use the relevant optional `test:browser`, `test:review`, or `test:reliability` suite with separately supplied browser tooling.
 5. For exporter changes, open a generated document in a real Word-compatible editor and inspect every page. Verify exclusion of private notes and unselected evidence.
 6. Confirm that the standalone app makes no external requests and that its clean offline download excludes current user data.
 7. Use fictional fixtures. Never attach real student contact information, resumes, notes, or backups to a commit, issue, or pull request.

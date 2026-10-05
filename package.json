@@ -1,6 +1,6 @@
 {
   "name": "proof-resume",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "An offline, evidence-first resume workshop for students.",
   "license": "MIT",
@@ -17,7 +17,9 @@
     "build": "npm test && node scripts/build.mjs",
     "test": "node scripts/assemble.mjs && node --test tests/*.test.mjs",
     "assemble": "node scripts/assemble.mjs",
-    "test:browser": "node scripts/assemble.mjs && node scripts/browser-qa.mjs"
+    "test:browser": "node scripts/assemble.mjs && node scripts/browser-qa.mjs",
+    "test:review": "node scripts/assemble.mjs && node scripts/review-qa.mjs",
+    "test:reliability": "node scripts/assemble.mjs && node scripts/reliability-qa.mjs"
   },
   "devDependencies": {
     "vite": "8.0.13"

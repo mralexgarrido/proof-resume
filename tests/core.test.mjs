@@ -95,6 +95,117 @@ test('rehearsal prompts challenge attribution and numbers without embedding priv
   const claim=C.contribution();claim.text='Supported a team campaign with 40 mockups.';claim.attribution='team';claim.evidence='PRIVATE_TOKEN';claim.interview.situation='PRIVATE_STAR';const questions=C.rehearsal(claim);assert.ok(questions.some(question=>/team accomplish/.test(question)));assert.ok(questions.some(question=>/number measured/.test(question)));assert.doesNotMatch(questions.join(' '),/PRIVATE_/);assert.equal(C.rehearsal(claim,'Created a content calendar for a proposal.').some(question=>/number measured/.test(question)),false);
 });
 
+test('numeric coaching distinguishes quantities from tool names and dimensional labels',()=>{
+  const claim=C.contribution();
+  for(const wording of [
+    'Configured GA4 events for a class website and documented the setup process.',
+    'Created a 3D model and documented changes from team fit tests.',
+    'Created a 3-D model and prepared annotated design views.',
+    'Prepared an onboarding guide in Microsoft 365 for recurring volunteer questions.',
+    'Prepared an onboarding guide in Microsoft365 for recurring volunteer questions.',
+    'Documented the shared file workflow in Office 365 for new volunteers.',
+    'Documented the Python3.11 environment used for a local practice tool.'
+  ]) {
+    assert.equal(C.feedback(claim,wording).some(item=>/Check numbers/.test(item.text)),false,wording);
+    assert.equal(C.rehearsal(claim,wording).some(question=>/number measured/.test(question)),false,wording);
+  }
+  for(const wording of [
+    'Analyzed 86 responses in Excel and documented the survey results.',
+    'Analyzed 86responses in a class survey and documented the results.',
+    'Reduced measured processing time by 20% during a class test.',
+    'Compared 1,250 survey responses in Excel for a course proposal.',
+    'Prepared a $500 budget allocation for a simulated campus campaign.',
+    'Recorded a 2.5 hour task duration using a course time log.',
+    'Recorded a .5 hour task duration using a course time log.',
+    'Configured GA4 and reviewed 86 recorded events in a practice dataset.'
+  ]) {
+    assert.equal(C.feedback(claim,wording).some(item=>/Check numbers/.test(item.text)),true,wording);
+    assert.equal(C.rehearsal(claim,wording).some(question=>/number measured/.test(question)),true,wording);
+  }
+});
+
+test('numeric fairness preserves change and attribution coaching without assuming a baseline for a scope count',()=>{
+  const claim=C.contribution();claim.attribution='team';
+  const wording='Improved the setup guide for GA4 and documented the configuration steps.';
+  assert.ok(C.feedback(claim,wording).some(item=>/comparison, observation, or feedback/.test(item.text)));
+  assert.ok(C.feedback(claim,wording).some(item=>/team contribution/.test(item.text)));
+  assert.equal(C.feedback(claim,'Collaborated on a GA4 setup guide and documented the team process.').some(item=>/team contribution/.test(item.text)),false);
+  for(const attribution of ['team','support']) {
+    claim.attribution=attribution;
+    assert.ok(C.rehearsal(claim,'Prepared campaign mockups in Canva for a class proposal.').some(question=>/team accomplish/.test(question)));
+  }
+  claim.attribution='personal';
+  const questions=C.rehearsal(claim,'Analyzed 86 responses in a class research project.');
+  assert.ok(questions.some(question=>/scope of your work or an observed change/.test(question)));
+  assert.doesNotMatch(questions.join(' '),/What was the baseline/);
+  claim.evidence='Measured 20% in PRIVATE_NOTES';
+  assert.equal(C.rehearsal(claim,'Prepared a class research summary.').some(question=>/number measured/.test(question)),false);
+});
+
+test('export review gives useful draft targets without changing state or the five foundations',()=>{
+  const state=C.blank(),before=JSON.stringify(state),issues=C.exportReview(state);
+  assert.equal(JSON.stringify(state),before);
+  assert.deepEqual(plain(issues.map(item=>item.id)),['contact-name','contact-email','education-empty','contributions-empty','skills-empty']);
+  assert.equal(issues.every(item=>item.kind==='missing'),true);
+  assert.deepEqual(plain(issues.find(item=>item.id==='contact-name').target),{page:'details',entity:'contact',id:'shared',key:'name'});
+  assert.deepEqual(plain(issues.find(item=>item.id==='education-empty').target),{page:'education',action:'add-education'});
+  assert.deepEqual(plain(issues.find(item=>item.id==='skills-empty').target),{page:'skills',action:'add-skill'});
+  assert.deepEqual(plain(C.exportReview(state)),plain(issues));
+  assert.equal(C.assessments(state).length,5);
+  assert.deepEqual(plain(C.exportReview(C.sample())),[]);
+});
+
+test('export review points to incomplete education and distinguishes an invalid email from missing data',()=>{
+  const state=C.sample(),entry=state.education[0];state.contact.email='jordan@';entry.school='';entry.dates='';
+  let issues=C.exportReview(state);
+  assert.equal(issues.find(item=>item.id==='contact-email').kind,'review');
+  assert.deepEqual(plain(issues.find(item=>item.id==='education-school-'+entry.id).target),{page:'education',entity:'education',id:entry.id,key:'school'});
+  assert.equal(issues.find(item=>item.id==='education-dates-'+entry.id).kind,'review');
+  assert.equal(issues.some(item=>item.id==='education-empty'),false);
+  entry.school='Example University';entry.degree='';
+  issues=C.exportReview(state);
+  assert.equal(issues.find(item=>item.id==='education-degree-'+entry.id).target.key,'degree');
+  assert.equal(issues.some(item=>item.id==='education-school-'+entry.id),false);
+});
+
+test('export review checks selected visible experience context once and targets each unreviewed claim',()=>{
+  const state=C.sample(),experience=state.experiences[0];experience.role='';experience.organization='';experience.dates='';
+  assert.equal(C.assessments(state).every(item=>item.ready),true);
+  experience.contributions.forEach(claim=>claim.reviewed=false);
+  const hidden=C.experience('personal');hidden.contributions=[Object.assign(C.contribution(),{text:'Hidden unfinished claim without metadata.'})];state.experiences.push(hidden);
+  const issues=C.exportReview(state),context=issues.filter(item=>item.id==='experience-context-'+experience.id),dates=issues.filter(item=>item.id==='experience-dates-'+experience.id);
+  assert.equal(context.length,1);assert.equal(dates.length,1);
+  assert.deepEqual(plain(context[0].target),{page:'library',entity:'experience',id:experience.id,key:'organization'});
+  assert.equal(dates[0].target.key,'dates');
+  for(const claim of experience.contributions)assert.deepEqual(plain(issues.find(item=>item.id==='claim-review-'+claim.id).target),{page:'library',entity:'contribution',id:claim.id,key:'reviewed'});
+  assert.equal(issues.some(item=>item.target.id===hidden.id||item.target.id===hidden.contributions[0].id),false);
+});
+
+test('export review follows adapted wording and its review without warnings for blank overrides',()=>{
+  const state=C.sample(),current=C.variant(state),claim=state.experiences[0].contributions[0];current.contributionIds=[claim.id];current.overrides[claim.id]='Compared student research responses for a marketing proposal.';
+  let issues=C.exportReview(state);
+  assert.deepEqual(plain(issues.find(item=>item.id==='claim-review-'+claim.id).target),{page:'library',action:'version-wording',id:claim.id});
+  assert.match(issues.find(item=>item.id==='claim-review-'+claim.id).detail,/Compared student research/);
+  current.reviewedOverrides.push(claim.id);
+  assert.equal(C.exportReview(state).some(item=>item.id==='claim-review-'+claim.id),false);
+  current.overrides[claim.id]=' ';
+  issues=C.exportReview(state);
+  assert.equal(issues.some(item=>item.id==='contributions-empty'),true);
+  assert.equal(issues.some(item=>item.id==='claim-review-'+claim.id||item.id==='experience-context-'+state.experiences[0].id),false);
+});
+
+test('export review flags only selected duplicate wording normalized by case and whitespace',()=>{
+  const state=C.sample(),current=C.variant(state),experience=state.experiences[0],first=experience.contributions[0],second=experience.contributions[1];
+  current.contributionIds=[first.id,second.id];current.overrides[second.id]='  '+first.text.toUpperCase().replace(/ /g,'  ')+'  ';current.reviewedOverrides.push(second.id);
+  const before=JSON.stringify(state),issues=C.exportReview(state),duplicate=issues.find(item=>item.id==='duplicate-'+second.id);
+  assert.equal(duplicate.kind,'review');assert.deepEqual(plain(duplicate.target),{page:'library',action:'version-wording',id:second.id});
+  assert.equal(JSON.stringify(state),before);
+  current.overrides[second.id]=first.text.replace(/\.$/,'!');
+  assert.equal(C.exportReview(state).some(item=>item.id.startsWith('duplicate-')),false);
+  current.overrides[second.id]=first.text;current.contributionIds=[first.id];
+  assert.equal(C.exportReview(state).some(item=>item.id.startsWith('duplicate-')),false);
+});
+
 test('metric helper computes change, treats zero baseline explicitly, and rejects invalid values',()=>{
   assert.deepEqual(plain(C.metric(100,125)),{difference:25,percent:25});assert.deepEqual(plain(C.metric('80','60')),{difference:-20,percent:-25});assert.deepEqual(plain(C.metric(0,10)),{difference:10,percent:null});assert.equal(C.metric(0.1,0.2).difference,0.1);assert.equal(C.metric(1e-12,2e-12).difference,1e-12);assert.throws(()=>C.metric('',20),/finite before/);assert.throws(()=>C.metric(Infinity,20),/finite before/);assert.throws(()=>C.metric(10,NaN),/finite after/);assert.throws(()=>C.metric(-1e308,1e308),/calculator range/);
 });

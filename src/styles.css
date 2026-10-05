@@ -18,3 +18,24 @@
 @media print{#print-root .resume-entry{break-inside:auto}#print-root .resume-entry .resume-title,#print-root .resume-entry .resume-sub{break-after:avoid}#print-root .resume-section h3{break-after:avoid}#print-root .paper li{break-inside:avoid}#print-root .paper{min-height:0}#print-root [data-action]{outline:0}#print-root .paper.a4{aspect-ratio:auto}.paper.compact{font-size:10.5pt!important}}
 @media(max-width:360px){.topbar .brand-title{display:none}.topbar{gap:8px}.header-actions{margin-left:auto}}
 @media(max-width:700px){.field input,.field textarea,.field select,.toolbar input,.toolbar select{font-size:16px}}
+/* Student review and resilient layouts for long project names and links. */
+.editor,.sidebar,.preview-inner,dialog{overflow-wrap:anywhere}
+.workspace,.sidebar,.field,.field>input,.field>textarea,.field>select,.version-card,.check-label>span,.dialog-head>div,.data-row>div,.review-item>div{min-width:0}
+.editor .btn,dialog .btn{max-width:100%;white-space:normal}
+.field-grid,.compact-grid,.version-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.continue-card{background:#f3f6ff;border:1px solid #c8d3fa;border-radius:14px;padding:22px;margin:0 0 24px}
+.continue-card h2{font-size:1.15rem;margin:8px 0}
+.continue-card>p:not(.eyebrow){font-size:.875rem;line-height:1.65;color:var(--muted)}
+.review-center{margin:25px 0;padding-top:24px;border-top:1px solid var(--border)}
+.review-center>h2{font-size:1.1rem}
+.review-item{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+.review-item h3{font-size:.875rem;margin-bottom:5px}
+.review-item p{font-size:.8125rem;color:var(--muted);line-height:1.6}
+.review-item .btn{flex-shrink:0}
+.check-card>div{min-width:0}
+.check-card>.btn{flex-shrink:0;white-space:nowrap}
+.connected-evidence{border:1px solid var(--border);border-radius:9px;padding:13px;background:#fafbff}
+.connected-evidence>p{margin:0 0 10px;color:var(--ink)}
+.connected-evidence .check-label{padding:0;border:0;background:transparent;margin:10px 0}
+.connected-evidence .btn{margin-top:4px}
+@media(max-width:700px){.field-grid,.compact-grid,.version-grid{grid-template-columns:minmax(0,1fr)}.continue-card{padding:18px}.review-item{gap:10px}}

@@ -82,15 +82,23 @@ const ProofCore = (() => {
   function capitalize(value) { return value?value.charAt(0).toUpperCase()+value.slice(1):''; }
   function continuingAction(value) { return /^(analyzed|analysed|assessed|assisted|built|compared|coordinated|created|designed|developed|documented|drafted|edited|evaluated|explained|gathered|identified|implemented|improved|led|maintained|measured|modeled|modelled|organized|organised|planned|prepared|presented|produced|researched|resolved|reviewed|scheduled|supported|tested|tracked|trained|wrote)\b/i.test(value)?value.charAt(0).toLowerCase()+value.slice(1):value; }
   function draft(item,mode='action') { const action=sentencePart(item.action),method=sentencePart(item.method),result=sentencePart(item.result);if(!action)return '';const withMethod=method?( /^(using|with|through|by|in)\b/i.test(method)?' '+method:' using '+method):'';if(mode==='result'&&result)return capitalize(result)+'; '+continuingAction(action)+withMethod+'.';if(mode==='method'&&method)return capitalize(/^(using|with|through|by|in)\b/i.test(method)?method:'Using '+method)+', '+continuingAction(action)+(result?'; '+result:'')+'.';return capitalize(action)+withMethod+(result?'; '+result:'')+'.'; }
+  function hasNumericQuantity(text) {
+    // Product names and dimensions are not accomplishment measurements. The
+    // remaining checks find numeric quantities, not whether a claim is true.
+    const value=trim(text).replace(/\b(?:Microsoft\s*365|Office\s*365|Google\s*Analytics\s*4|HTML\s*5|CSS\s*3|COVID[ -]?19|[23][ -]?D)\b/gi,'');
+    const standalone=/(^|[^\p{L}\p{N}_.])(?:[$€£¥]\s*)?[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:%|\s*percent\b)?(?=$|[^\p{L}\p{N}_.]|\.(?!\d))/u;
+    const joinedUnit=/(^|[^\p{L}\p{N}_])\d+(?:responses?|students?|attendees?|customers?|participants?|surveys?|items?|files?|records?|hours?|minutes?|days?|weeks?|months?|dollars?|units?|mockups?)(?=$|[^\p{L}\p{N}_])/iu;
+    return standalone.test(value)||joinedUnit.test(value);
+  }
   function feedback(item,text=item.text) {
     const value=trim(text),items=[];if(!value)return [{text:'Start with one thing you personally did. A useful deliverable counts even without a number.',good:false}];
     if(/^(responsible for|duties included|helped with|worked on)\b/i.test(value))items.push({text:'Start with your own action. What did you create, organize, analyze, explain, or change?',good:false});
     if(/^(i|my|we|our)\b/i.test(value))items.push({text:'For résumé wording, try starting with the action instead of a personal pronoun.',good:false});
     if(/\b(hard.?working|team player|go.getter|results.driven|passionate|synergy|rockstar|dynamic professional|detail.oriented)\b/i.test(value))items.push({text:'Replace a broad label with an example that lets the reader see that quality.',good:false});
     const wordCount=value.split(/\s+/).length;if(wordCount>42)items.push({text:'This bullet has '+wordCount+' words. Try one contribution and keep the clearest details.',good:false});if(wordCount<8)items.push({text:'Add the object of your work, a method, or a useful detail so the reader can picture this contribution.',good:false});
-    if(/\d/.test(value))items.push({text:'Check numbers in this wording. Separate measured results, estimates, and the size of your work.',good:false});
+    if(hasNumericQuantity(value))items.push({text:'Check numbers in this wording. Separate measured results, estimates, and the size of your work.',good:false});
     if(item.attribution==='team'&&!/\b(team|collaborat\w*|co-led|joint\w*|supported)\b/i.test(value))items.push({text:'This is marked as a team contribution. Credit the shared outcome and make your own part clear.',good:false});
-    if(/\b(increased|decreased|improved|reduced|boosted|grew)\b/i.test(value)&&!/(\d|\bfrom\b|\bby\b|\bcompared\b)/i.test(value))items.push({text:'You describe a change. What comparison, observation, or feedback supports it?',good:false});
+    if(/\b(increased|decreased|improved|reduced|boosted|grew)\b/i.test(value)&&!hasNumericQuantity(value)&&!/\b(from|by|compared)\b/i.test(value))items.push({text:'You describe a change. What comparison, observation, or feedback supports it?',good:false});
     if(trim(item.evidence))items.push({text:'You have a private evidence note to help recall the story behind this claim.',good:true});if(item.reviewed)items.push({text:'You marked this claim as reviewed. Recheck it whenever the wording changes.',good:true});if(!items.length)items.push({text:'This wording avoids the common patterns checked here. Read it aloud and confirm it names your contribution.',good:true});return items;
   }
   function content(state,variantId=state.selectedVariantId) {
@@ -109,6 +117,46 @@ const ProofCore = (() => {
     {name:'Review the claims you selected',ready:included.length>0&&included.every(item=>own(current.overrides,item.contribution.id)?current.reviewedOverrides.includes(item.contribution.id):item.contribution.reviewed),description:'Review every selected claim, including any wording adjusted for this version.',step:'library'},
     {name:'Name skills you can demonstrate',ready:state.skills.some(item=>current.skillIds.includes(item.id)&&trim(item.name)),description:'Select concrete skills to discuss or demonstrate.',step:'skills'}
   ]; }
+  function exportReview(state) {
+    const current=variant(state),selected=new Set(current.contributionIds),issues=[];
+    const add=(id,kind,text,detail,target)=>issues.push({id,kind,text,detail,target});
+    const contactTarget=key=>({page:'details',entity:'contact',id:'shared',key});
+    if(!trim(state.contact.name))add('contact-name','missing','Add your name.','Use the name you want employers to see at the top of this resume.',contactTarget('name'));
+    const email=trim(state.contact.email);
+    if(!email)add('contact-email','missing','Add an email address.','Choose an address you check regularly so someone can reach you.',contactTarget('email'));
+    else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))add('contact-email','review','Check your email address.','Include a name, an @ sign, and a domain, such as you@example.com.',contactTarget('email'));
+
+    const educationEntries=state.education.filter(item=>trim(item.school)||trim(item.degree));
+    if(!educationEntries.length)add('education-empty','missing','Add your education context.','A school and degree or program help readers understand your preparation.',{page:'education',action:'add-education'});
+    for(const entry of educationEntries) {
+      const target=key=>({page:'education',entity:'education',id:entry.id,key});
+      if(!trim(entry.school))add('education-school-'+entry.id,'missing','Name the school or institution.','Add the institution for '+trim(entry.degree)+'.',target('school'));
+      if(!trim(entry.degree))add('education-degree-'+entry.id,'missing','Name your degree or program.','Add the program you studied at '+trim(entry.school)+'.',target('degree'));
+      if(!trim(entry.dates))add('education-dates-'+entry.id,'review','Consider adding a graduation date.','For '+(trim(entry.school)||trim(entry.degree))+', include an expected or completed graduation date when useful.',target('dates'));
+    }
+
+    const included=cards(state).filter(({contribution:claim})=>selected.has(claim.id)&&trim(own(current.overrides,claim.id)?current.overrides[claim.id]:claim.text));
+    if(!included.length)add('contributions-empty','missing','Select a finished contribution.','Build or write one bullet in My evidence, then choose it for this version.',{page:'library'});
+    const checkedExperiences=new Set(),wordings=new Map();
+    for(const {experience,contribution:claim} of included) {
+      const adapted=own(current.overrides,claim.id),text=trim(adapted?current.overrides[claim.id]:claim.text);
+      if(!checkedExperiences.has(experience.id)) {
+        checkedExperiences.add(experience.id);
+        const target=key=>({page:'library',entity:'experience',id:experience.id,key});
+        if(!trim(experience.role)&&!trim(experience.organization))add('experience-context-'+experience.id,'missing','Name this experience.','Add a project, employer, organization, or role so the selected work has context.',target('organization'));
+        if(!trim(experience.dates))add('experience-dates-'+experience.id,'review','Add dates when you can.','Dates help readers place '+(trim(experience.organization)||trim(experience.role)||'this experience')+' in your timeline.',target('dates'));
+      }
+      const claimTarget=key=>adapted?{page:'library',action:'version-wording',id:claim.id}:{page:'library',entity:'contribution',id:claim.id,key};
+      const excerpt=Array.from(text).slice(0,140).join('')+(Array.from(text).length>140?'…':'');
+      const reviewed=adapted?current.reviewedOverrides.includes(claim.id):claim.reviewed;
+      if(!reviewed)add('claim-review-'+claim.id,'review','Review this selected claim.','Can you explain and support this wording? '+excerpt,claimTarget('reviewed'));
+      const key=text.replace(/\s+/g,' ').toLowerCase();
+      if(wordings.has(key))add('duplicate-'+claim.id,'review','Check repeated wording.','This wording appears more than once in this version. Keep both if they describe distinct work, or edit the repetition: '+excerpt,claimTarget('text'));
+      else wordings.set(key,claim.id);
+    }
+    if(!state.skills.some(skill=>current.skillIds.includes(skill.id)&&trim(skill.name)))add('skills-empty','missing','Select a named skill.','Choose an existing tool, method, or language you can discuss, or add one you have practiced.',{page:'skills',action:'add-skill'});
+    return issues;
+  }
   const ALIASES = [
     {terms:['excel','microsoft excel'],signals:['excel','microsoft excel']},
     {terms:['canva'],signals:['canva']},
@@ -129,7 +177,7 @@ const ProofCore = (() => {
   function searchText(value) { return trim(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim(); }
   function phrase(haystack,needle) { return !!needle&&(' '+haystack+' ').includes(' '+needle+' '); }
   function requirementMatches(state,requirementText) { const requirement=searchText(requirementText);if(!requirement)return [];const matchingAliases=ALIASES.filter(group=>group.terms.some(term=>phrase(requirement,searchText(term))));return cards(state).filter(({contribution:claim})=>{const haystack=searchText([claim.text,...claim.tags].join(' '));return trim(claim.text)&&(phrase(haystack,requirement)||matchingAliases.some(group=>group.signals.some(signal=>phrase(haystack,searchText(signal)))));}).map(item=>item.contribution.id); }
-  function rehearsal(item,text=item.text) { const questions=['What was the situation, and who needed this work?','What were you personally responsible for?','Walk through one decision or tradeoff you made.','What did you deliver, and who used it?','What would you change if you did it again?'];if(/\d/.test(trim(text)))questions.splice(4,0,'How was each number measured or estimated? What was the baseline?');if(item.attribution==='team'||item.attribution==='support')questions.splice(2,0,'What did the team accomplish, and which part did you own or support?');questions.push('What evidence or person could help you explain this claim?');return questions; }
+  function rehearsal(item,text=item.text) { const questions=['What was the situation, and who needed this work?','What were you personally responsible for?','Walk through one decision or tradeoff you made.','What did you deliver, and who used it?','What would you change if you did it again?'];if(hasNumericQuantity(text))questions.splice(4,0,'How was each number measured or estimated? Does it describe the scope of your work or an observed change?');if(item.attribution==='team'||item.attribution==='support')questions.splice(2,0,'What did the team accomplish, and which part did you own or support?');questions.push('What evidence or person could help you explain this claim?');return questions; }
   function metric(before,after) { const numeric=(value,label)=>{if(typeof value!=='number'&&typeof value!=='string'||typeof value==='string'&&!value.trim())throw new Error('Enter a finite '+label+' value.');const result=Number(value);if(!Number.isFinite(result))throw new Error('Enter a finite '+label+' value.');return result;};const first=numeric(before,'before'),last=numeric(after,'after'),difference=last-first,percent=first===0?null:difference/Math.abs(first)*100;if(!Number.isFinite(difference)||percent!==null&&!Number.isFinite(percent))throw new Error('Those values exceed the calculator range.');return {difference:Number(difference.toPrecision(15)),percent:percent===null?null:Number(percent.toPrecision(15))}; }
   function normalizeHandoff(raw) {
     record(raw,'Evidence handoff');knownKeys(raw,['app','version','title','source','status','contributions'],'Evidence handoff');if(raw.app!=='proof-evidence'||raw.version!==1)fail('Choose a proof-evidence version 1 handoff.');const title=string(raw.title,LIMITS.field,'Project title');if(!trim(title))fail('The evidence handoff needs a project title.');if(!own(raw,'source')||!own(raw,'status'))fail('The evidence handoff needs a source and project status.');const source=choice(raw.source,Object.keys(SOURCES),'Evidence source'),status=choice(raw.status,STATUSES,'Evidence status');const input=list(raw.contributions,LIMITS.contributionsPerExperience,'Handoff contributions');if(!input.length)fail('The evidence handoff needs at least one contribution.');const result=experience(source);result.organization=title;result.status=status;result.contributions=input.map(rawClaim=>{record(rawClaim,'Handoff contribution');knownKeys(rawClaim,['text','action','method','result','evidence','reflection'],'Handoff contribution');const claim=contribution();for(const key of ['text','action','method','result','evidence','reflection'])claim[key]=string(rawClaim[key],['evidence','reflection'].includes(key)?LIMITS.note:LIMITS.text,'Handoff '+key);if(!trim(claim.text)&&!trim(claim.action))fail('Each handoff contribution needs an action or finished text.');if(!trim(claim.text))claim.text=draft(claim);if(claim.text.length>LIMITS.text)fail('One assembled handoff bullet exceeds '+LIMITS.text+' characters.');return claim;});return [result];
@@ -141,5 +189,5 @@ const ProofCore = (() => {
     const campus=experience('campus');Object.assign(campus,{role:'Event Volunteer',organization:'Student Business Society',dates:'September 2025 to May 2026'});const fifth=contribution();Object.assign(fifth,{text:'Coordinated check-in for a campus networking event with 70 attendees and prepared name tags and registration materials.',reviewed:true});campus.contributions=[fifth];state.experiences=[project,work,campus];state.skills=[{id:id(),name:'Excel (pivot tables)',category:'tools',practice:'independent',contributionIds:[first.id]},{id:id(),name:'Canva',category:'tools',practice:'repeated',contributionIds:[second.id]},{id:id(),name:'Survey analysis',category:'methods',practice:'independent',contributionIds:[first.id]},{id:id(),name:'English (fluent), Spanish (conversational)',category:'languages',practice:'',contributionIds:[]}];const current=variant(state);current.contributionIds=cards(state).map(item=>item.contribution.id);current.skillIds=state.skills.map(item=>item.id);return state;
   }
   function template() { const state=blank();state.contact={name:'YOUR NAME',email:'you@example.com',phone:'Your phone',location:'City, State',linkedin:'',portfolio:'Your portfolio URL'};state.education=[{...education(),school:'University or college',degree:'Degree and major',dates:'Expected graduation month and year',courses:'Selected courses relevant to your interests'}];const project=experience('course');project.role='Your project role';project.organization='Project or course name';project.dates='Month Year';project.contributions=[{...contribution(),text:'Describe what you created, analyzed, organized, or improved.'},{...contribution(),text:'Explain your method and what you delivered, using accurate details.'}];const work=experience('work');work.role='Your role';work.organization='Employer or organization';work.dates='Month Year to Month Year';work.contributions=[{...contribution(),text:'Name a specific contribution and who benefited from it.'}];state.experiences=[project,work];state.skills=[{id:id(),name:'Tools you can demonstrate',category:'tools',practice:'',contributionIds:[]},{id:id(),name:'Methods you have practiced',category:'methods',practice:'',contributionIds:[]}];const current=variant(state);current.contributionIds=cards(state).map(item=>item.contribution.id);current.skillIds=state.skills.map(item=>item.id);return state; }
-  return {ORDER,LABELS,SOURCES,LIMITS,STATUSES,PRACTICE,ATTRIBUTION,CATEGORIES,id,blank,education,experience,contribution,variantFactory,variant,cards,normalize,normalizeHandoff,draft,feedback,content,countWords,assessments,requirementMatches,rehearsal,metric,sample,template,lines,esc};
+  return {ORDER,LABELS,SOURCES,LIMITS,STATUSES,PRACTICE,ATTRIBUTION,CATEGORIES,id,blank,education,experience,contribution,variantFactory,variant,cards,normalize,normalizeHandoff,draft,feedback,content,countWords,assessments,exportReview,requirementMatches,rehearsal,metric,sample,template,lines,esc};
 })();
